@@ -15,9 +15,10 @@ const RF64BigTableEntry = struct {
 const RF64ChunkListIter = struct {
     file: File,
     size: i64,
-    rf64_bigtable: []RF64BigTableEntry,
+    allocator: std.mem.Allocator,
+    rf64_bigtable: ?[]RF64BigTableEntry,
 
-    pub fn init(path: []const u8) !@This() {
+    pub fn init(path: []const u8, allocator: std.mem.Allocator) !@This() {
         const file = try cwd().openFile(path, .{});
         errdefer file.close();
 
@@ -32,10 +33,37 @@ const RF64ChunkListIter = struct {
             return @This(){
                 .file = file,
                 .size = @intCast(this_size),
-                .rf64_bigtable = &.{},
+                .allocator = allocator,
+                .rf64_bigtable = null,
             };
         } else if (eql(u8, &this_signature, "RF64")) {
-            @panic("Continue RF64");
+            _ = try file.reader().readInt(u32, .little);
+            try file.seekBy(12); // "WAVEd s64xx xx"
+            const rf64_size = try file.reader().readInt(i64, .little);
+            const data_size = try file.reader().readInt(u64, .little);
+            try file.seekBy(8); // sample count
+            const table_size = try file.reader().readInt(u8, .little);
+            var bigtable = try allocator.alloc(RF64BigTableEntry, table_size + 1);
+            bigtable[0] = RF64BigTableEntry{
+                .ident = "data".*,
+                .size = data_size,
+            };
+
+            for (0..table_size) |n| {
+                var this_ident: [4]u8 = undefined;
+                _ = try file.read(&this_ident);
+                bigtable[n + 1] = RF64BigTableEntry{
+                    .ident = this_ident,
+                    .size = try file.reader().readInt(u64, .little),
+                };
+            }
+
+            return @This(){
+                .file = file,
+                .size = rf64_size,
+                .allocator = allocator,
+                .rf64_bigtable = bigtable,
+            };
         } else {
             return error.NotWaveFile;
         }
@@ -56,18 +84,25 @@ const RF64ChunkListIter = struct {
     }
 
     pub fn close(self: @This()) void {
+        if (self.rf64_bigtable) |b| {
+            _ = self.allocator.free(b);
+        }
         self.file.close();
     }
 };
 
 test "test open WAVE" {
-    const iter = try RF64ChunkListIter.init("tone.wav");
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const iter = try RF64ChunkListIter.init("tone.wav", gpa.allocator());
     defer iter.close();
     try std.testing.expectEqual(iter.size, 88270);
 }
 
 test "iterate chunks simple WAVE" {
-    const iter = try RF64ChunkListIter.init("tone.wav");
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const iter = try RF64ChunkListIter.init("tone.wav", gpa.allocator());
     defer iter.close();
     var counter: u32 = 0;
     while (try iter.next()) |chunk| {
