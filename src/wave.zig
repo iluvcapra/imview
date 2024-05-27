@@ -76,6 +76,8 @@ const RF64ChunkListIter = struct {
         }
     }
 
+    /// Get the fourCC, payload start offset and payload length of the next
+    /// chunk.
     pub fn next(self: *@This()) !?struct { [4]u8, u64, u64 } {
         try self.file.seekTo(self.nextpos);
 
@@ -161,6 +163,46 @@ test "iterate chunks simple WAVE" {
             },
         }
         counter += 1;
+    }
+}
+
+test "move around between iterations" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
+    var iter = try RF64ChunkListIter.init("test_audio/tone.wav", gpa.allocator());
+    defer iter.close();
+
+    if (try iter.next()) |chunk1| {
+        try iter.file.seekTo(chunk1[1]);
+        _ = try iter.file.reader().readInt(u16, .little);
+        _ = try iter.file.reader().readInt(u16, .little);
+        const sample_rate = try iter.file.reader().readInt(u32, .little);
+        try std.testing.expectEqual(sample_rate, 44100);
+    }
+
+    if (try iter.next()) |chunk2| {
+        try std.testing.expect(eql(u8, &chunk2[0], "LIST"));
+    }
+}
+
+test "move around between iterations RF64" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
+    var iter = try RF64ChunkListIter.init("test_audio/tone64.wav", gpa.allocator());
+    defer iter.close();
+
+    if (try iter.next()) |chunk1| {
+        try iter.file.seekTo(chunk1[1]);
+        _ = try iter.file.reader().readInt(u16, .little);
+        _ = try iter.file.reader().readInt(u16, .little);
+        const sample_rate = try iter.file.reader().readInt(u32, .little);
+        try std.testing.expectEqual(sample_rate, 44100);
+    }
+
+    if (try iter.next()) |chunk2| {
+        try std.testing.expect(eql(u8, &chunk2[0], "LIST"));
     }
 }
 
