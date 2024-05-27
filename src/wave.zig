@@ -5,7 +5,7 @@ const File = std.fs.File;
 const cwd = std.fs.cwd;
 const eql = std.mem.eql;
 
-const WaveErrors = error{ NotWaveFile, InvalidChunkSize, MissingDS64ChunkSize };
+const WaveErrors = error{NotWaveFile};
 
 const RF64BigTableEntry = struct {
     ident: [4]u8,
@@ -40,7 +40,9 @@ const RF64ChunkListIter = struct {
             };
         } else if (eql(u8, &this_signature, "RF64")) {
             _ = try file.reader().readInt(u32, .little);
-            try file.seekBy(12); // "WAVEd s64xx xx"
+            try file.seekBy(8); // "WAVEd s64xx xx"
+            const ds64_size = try file.reader().readInt(u32, .little);
+            const ds64_start = try file.getPos();
             const rf64_size = try file.reader().readInt(i64, .little);
             const data_size = try file.reader().readInt(u64, .little);
             try file.seekBy(8); // sample count
@@ -59,6 +61,8 @@ const RF64ChunkListIter = struct {
                     .size = try file.reader().readInt(u64, .little),
                 };
             }
+
+            try file.seekTo(ds64_start + ds64_size);
 
             return @This(){
                 .file = file,
@@ -92,12 +96,12 @@ const RF64ChunkListIter = struct {
                         }
                     }
                 } else {
-                    return error.InvalidChunkSize;
+                    @panic("Invalid chunk size 0xFFFFFFFF in normal WAVE file");
                 }
             }
 
             if (size == 0xFFFFFFFF) {
-                return error.MissingDS64ChunkSize;
+                @panic("Malformed RF64 WAVE file, missing ds64 entry");
             }
 
             const start: u64 = try self.file.getPos();
@@ -151,6 +155,39 @@ test "iterate chunks simple WAVE" {
                 try std.testing.expect(eql(u8, &chunk[0], "data"));
                 try std.testing.expectEqual(chunk[1], 78);
                 try std.testing.expectEqual(chunk[2], 88200);
+            },
+            else => {
+                try std.testing.expect(false);
+            },
+        }
+        counter += 1;
+    }
+}
+
+test "iterate chunks RF64 WAVE" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
+    var iter = try RF64ChunkListIter.init("tone64.wav", gpa.allocator());
+    defer iter.close();
+
+    var counter: u32 = 0;
+    while (try iter.next()) |chunk| {
+        switch (counter) {
+            0 => {
+                try std.testing.expect(eql(u8, &chunk[0], "fmt "));
+                try std.testing.expectEqual(chunk[1], 56);
+                try std.testing.expectEqual(chunk[2], 16);
+            },
+            1 => {
+                try std.testing.expect(eql(u8, &chunk[0], "LIST"));
+                try std.testing.expectEqual(chunk[1], 80);
+                try std.testing.expectEqual(chunk[2], 26);
+            },
+            2 => {
+                try std.testing.expect(eql(u8, &chunk[0], "data"));
+                try std.testing.expectEqual(chunk[1], 114);
+                try std.testing.expectEqual(chunk[2], 90112);
             },
             else => {
                 try std.testing.expect(false);
