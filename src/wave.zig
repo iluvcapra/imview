@@ -5,7 +5,7 @@ const File = std.fs.File;
 const cwd = std.fs.cwd;
 const eql = std.mem.eql;
 
-const WaveErrors = error{NotWaveFile};
+const WaveErrors = error{ NotWaveFile, InvalidChunkSize, MissingDS64ChunkSize };
 
 const RF64BigTableEntry = struct {
     ident: [4]u8,
@@ -17,6 +17,7 @@ const RF64ChunkListIter = struct {
     size: i64,
     allocator: std.mem.Allocator,
     rf64_bigtable: ?[]RF64BigTableEntry,
+    nextpos: u64,
 
     pub fn init(path: []const u8, allocator: std.mem.Allocator) !@This() {
         const file = try cwd().openFile(path, .{});
@@ -35,6 +36,7 @@ const RF64ChunkListIter = struct {
                 .size = @intCast(this_size),
                 .allocator = allocator,
                 .rf64_bigtable = null,
+                .nextpos = @intCast(try file.getPos()),
             };
         } else if (eql(u8, &this_signature, "RF64")) {
             _ = try file.reader().readInt(u32, .little);
@@ -63,22 +65,46 @@ const RF64ChunkListIter = struct {
                 .size = rf64_size,
                 .allocator = allocator,
                 .rf64_bigtable = bigtable,
+                .nextpos = @intCast(try file.getPos()),
             };
         } else {
             return error.NotWaveFile;
         }
     }
 
-    pub fn next(self: @This()) !?struct { [4]u8, u64, u32 } {
+    pub fn next(self: *@This()) !?struct { [4]u8, u64, u64 } {
+        try self.file.seekTo(self.nextpos);
+
         if (try self.file.getPos() >= self.size + 8) {
             return null;
         } else {
             var fourcc: [4]u8 = undefined;
             _ = try self.file.read(&fourcc);
-            const size: u32 = try self.file.reader().readInt(u32, .little);
+
+            var size: u64 = @intCast(try self.file.reader().readInt(u32, .little));
+
+            if (size == 0xFFFFFFFF) {
+                if (self.rf64_bigtable) |bt| {
+                    for (bt) |entry| {
+                        if (std.mem.eql(u8, &entry.ident, &fourcc)) {
+                            size = entry.size;
+                            break;
+                        }
+                    }
+                } else {
+                    return error.InvalidChunkSize;
+                }
+            }
+
+            if (size == 0xFFFFFFFF) {
+                return error.MissingDS64ChunkSize;
+            }
+
             const start: u64 = try self.file.getPos();
-            const size64: i64 = @intCast(size);
-            try self.file.seekBy(size64 + size % 2);
+            const size_i64: i64 = @truncate(@as(i128, size));
+            try self.file.seekBy(size_i64 + @mod(size_i64, 2));
+
+            self.*.nextpos = start + size;
             return .{ fourcc, start, size };
         }
     }
@@ -94,7 +120,7 @@ const RF64ChunkListIter = struct {
 test "test open WAVE" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
-    const iter = try RF64ChunkListIter.init("tone.wav", gpa.allocator());
+    var iter = try RF64ChunkListIter.init("tone.wav", gpa.allocator());
     defer iter.close();
     try std.testing.expectEqual(iter.size, 88270);
 }
@@ -102,11 +128,10 @@ test "test open WAVE" {
 test "iterate chunks simple WAVE" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
-    const iter = try RF64ChunkListIter.init("tone.wav", gpa.allocator());
+    var iter = try RF64ChunkListIter.init("tone.wav", gpa.allocator());
     defer iter.close();
     var counter: u32 = 0;
     while (try iter.next()) |chunk| {
-        // std.debug.print("A Chunk {s}, size: {}, at: {}\n", chunk);
         switch (counter) {
             0 => {
                 try std.testing.expect(eql(u8, &chunk[0], "fmt "));
