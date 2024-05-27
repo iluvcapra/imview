@@ -46,11 +46,9 @@ const RF64ChunkListIter = struct {
             return null;
         } else {
             var fourcc: [4]u8 = undefined;
-            var start: u64 = undefined;
-            var size: u32 = undefined;
             _ = try self.file.read(&fourcc);
-            size = try self.file.reader().readInt(u32, .little);
-            start = try self.file.getPos();
+            const size: u32 = try self.file.reader().readInt(u32, .little);
+            const start: u64 = try self.file.getPos();
             const size64: i64 = @intCast(size);
             try self.file.seekBy(size64 + size % 2);
             return .{ fourcc, start, size };
