@@ -120,16 +120,20 @@ const RF64ChunkListIter = struct {
 test "test open WAVE" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
+
     var iter = try RF64ChunkListIter.init("tone.wav", gpa.allocator());
     defer iter.close();
+
     try std.testing.expectEqual(iter.size, 88270);
 }
 
 test "iterate chunks simple WAVE" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
+
     var iter = try RF64ChunkListIter.init("tone.wav", gpa.allocator());
     defer iter.close();
+
     var counter: u32 = 0;
     while (try iter.next()) |chunk| {
         switch (counter) {
