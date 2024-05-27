@@ -71,7 +71,29 @@ test "test open WAVE" {
 test "iterate chunks simple WAVE" {
     const iter = try RF64ChunkListIter.init("tone.wav");
     defer iter.close();
+    var counter: u32 = 0;
     while (try iter.next()) |chunk| {
-        std.debug.print("A Chunk {s}, size: {}, at: {}\n", chunk);
+        // std.debug.print("A Chunk {s}, size: {}, at: {}\n", chunk);
+        switch (counter) {
+            0 => {
+                try std.testing.expect(eql(u8, &chunk[0], "fmt "));
+                try std.testing.expectEqual(chunk[1], 20);
+                try std.testing.expectEqual(chunk[2], 16);
+            },
+            1 => {
+                try std.testing.expect(eql(u8, &chunk[0], "LIST"));
+                try std.testing.expectEqual(chunk[1], 44);
+                try std.testing.expectEqual(chunk[2], 26);
+            },
+            2 => {
+                try std.testing.expect(eql(u8, &chunk[0], "data"));
+                try std.testing.expectEqual(chunk[1], 78);
+                try std.testing.expectEqual(chunk[2], 88200);
+            },
+            else => {
+                try std.testing.expect(false);
+            },
+        }
+        counter += 1;
     }
 }
