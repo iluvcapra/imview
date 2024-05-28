@@ -28,6 +28,7 @@ const RF64ChunkListIter = struct {
 
         try file.seekTo(0);
         _ = try file.read(&this_signature);
+
         if (eql(u8, &this_signature, "RIFF")) {
             this_size = try file.reader().readInt(u32, .little);
             try file.seekBy(4);
@@ -76,6 +77,17 @@ const RF64ChunkListIter = struct {
         }
     }
 
+    fn lookup_rf64_chunk_size(self: *@This(), ident: [4]u8) ?u64 {
+        if (self.rf64_bigtable) |bt| {
+            for (bt) |entry| {
+                if (std.mem.eql(u8, &entry.ident, &ident)) {
+                    return entry.size;
+                }
+            }
+        }
+        return null;
+    }
+
     /// Get the fourCC, payload start offset and payload length of the next
     /// chunk.
     pub fn next(self: *@This()) !?struct { [4]u8, u64, u64 } {
@@ -90,20 +102,11 @@ const RF64ChunkListIter = struct {
             var size: u64 = @intCast(try self.file.reader().readInt(u32, .little));
 
             if (size == 0xFFFFFFFF) {
-                if (self.rf64_bigtable) |bt| {
-                    for (bt) |entry| {
-                        if (std.mem.eql(u8, &entry.ident, &fourcc)) {
-                            size = entry.size;
-                            break;
-                        }
-                    }
+                if (self.lookup_rf64_chunk_size(fourcc)) |rf64_size| {
+                    size = rf64_size;
                 } else {
-                    @panic("Invalid chunk size '0xFFFFFFFF' in normal WAVE file");
+                    @panic("Malformed RF64 WAVE file, missing ds64 entry");
                 }
-            }
-
-            if (size == 0xFFFFFFFF) {
-                @panic("Malformed RF64 WAVE file, missing ds64 entry");
             }
 
             const start: u64 = try self.file.getPos();
