@@ -98,7 +98,7 @@ const RF64ChunkListIter = struct {
                         }
                     }
                 } else {
-                    @panic("Invalid chunk size 0xFFFFFFFF in normal WAVE file");
+                    @panic("Invalid chunk size '0xFFFFFFFF' in normal WAVE file");
                 }
             }
 
