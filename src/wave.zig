@@ -1,11 +1,22 @@
 /// Basic WAVE file reading/writing operations
-///
 const std = @import("std");
 const File = std.fs.File;
 const cwd = std.fs.cwd;
 const eql = std.mem.eql;
 
 const WaveErrors = error{NotWaveFile};
+
+// pub const AudioId = struct {
+//     track_index: u16,
+//     uid: [12]u8,
+//     track_ref: [14]u8,
+//     pack_ref: [11]u8,
+// };
+
+pub fn read_chna_axml_chunks(path: []const u8, allocator: std.mem.Allocator) struct { ?[]u8, ?[]u8 } {
+    _ = path;
+    _ = allocator;
+}
 
 const RF64BigTableEntry = struct {
     ident: [4]u8,
@@ -41,7 +52,7 @@ const RF64ChunkListIter = struct {
             };
         } else if (eql(u8, &this_signature, "RF64")) {
             _ = try file.reader().readInt(u32, .little);
-            try file.seekBy(8); // "WAVEd s64xx xx"
+            try file.seekBy(8); // "WAVEd s64"
             const ds64_size = try file.reader().readInt(u32, .little);
             const ds64_start = try file.getPos();
             const rf64_size = try file.reader().readInt(i64, .little);
