@@ -33,6 +33,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    exe_unit_tests.linkSystemLibrary("xml2");
+    exe_unit_tests.linkLibC();
+
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
 
     const test_step = b.step("test", "Run unit tests");
