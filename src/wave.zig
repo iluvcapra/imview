@@ -6,16 +6,20 @@ const eql = std.mem.eql;
 
 const WaveErrors = error{NotWaveFile};
 
-// pub const AudioId = struct {
-//     track_index: u16,
-//     uid: [12]u8,
-//     track_ref: [14]u8,
-//     pack_ref: [11]u8,
-// };
+pub fn read_chunk(path: []const u8, fourcc: *const [4]u8, allocator: std.mem.Allocator) !?[]u8 {
+    var chunks = try RF64ChunkListIter.init(path, allocator);
+    defer chunks.close();
 
-pub fn read_chna_axml_chunks(path: []const u8, allocator: std.mem.Allocator) struct { ?[]u8, ?[]u8 } {
-    _ = path;
-    _ = allocator;
+    while (try chunks.next()) |a_chunk| {
+        if (eql(u8, &a_chunk[0], fourcc)) {
+            const ret_chunk = try allocator.alloc(u8, a_chunk[2]);
+            try chunks.file.seekTo(a_chunk[1]);
+            _ = try chunks.file.read(ret_chunk);
+            return ret_chunk;
+        }
+    }
+
+    return null;
 }
 
 const RF64BigTableEntry = struct {
@@ -124,7 +128,7 @@ const RF64ChunkListIter = struct {
             const size_i64: i64 = @truncate(@as(i128, size));
             try self.file.seekBy(size_i64 + @mod(size_i64, 2));
 
-            self.*.nextpos = start + size;
+            self.*.nextpos = start + size + @mod(size, 2);
             return .{ fourcc, start, size };
         }
     }
@@ -251,4 +255,23 @@ test "iterate chunks RF64 WAVE" {
         }
         counter += 1;
     }
+}
+
+test "read chunks" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
+    const data = try read_chunk("test_audio/adm.wav", "axml", gpa.allocator());
+    defer if (data) |d| {
+        gpa.allocator().free(d);
+    };
+
+    try std.testing.expect(data != null);
+
+    const data2 = try read_chunk("test_audio/adm.wav", "chna", gpa.allocator());
+    defer if (data2) |d| {
+        gpa.allocator().free(d);
+    };
+
+    try std.testing.expect(data2 != null);
 }

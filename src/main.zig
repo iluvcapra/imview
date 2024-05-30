@@ -1,5 +1,6 @@
 const std = @import("std");
 pub const adm = @import("adm.zig");
+pub const wave = @import("wave.zig");
 
 pub fn main() !void {
     // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)

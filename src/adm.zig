@@ -1,4 +1,5 @@
 const std = @import("std");
+const wave = @import("wave.zig");
 const xml = @cImport({
     @cInclude("libxml2/libxml/parser.h");
     @cInclude("libxml2/libxml/tree.h");
