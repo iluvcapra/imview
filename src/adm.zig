@@ -21,23 +21,27 @@ const AdmAudioProgramme = struct {
     audioProgrammeName: []const u8,
     start: []const u8,
     end: []const u8,
-    audioContentIDs: [][]const u8,
+    audioContentIDs: []AdmAudioContent,
     allocator: Allocator,
 
     fn init(allocator: Allocator, xpath_ctx: xml.xmlXPathContextPtr) @This() {
         const audioProgrammeID = xpath_string_value("string(//adm:audioFormatExtended/adm:audioProgramme[1]/@audioProgrammeID)", xpath_ctx, null, allocator);
+        if (audioProgrammeID.len == 0) {
+            @panic("audioProgramme not found!");
+        }
         const audioProgrammeName = xpath_string_value("string(//*/adm:audioProgramme[1]/@audioProgrammeName)", xpath_ctx, null, allocator);
         const start = xpath_string_value("string(//*/adm:audioProgramme[1]/@start)", xpath_ctx, null, allocator);
         const end = xpath_string_value("string(//*/adm:audioProgramme[1]/@end)", xpath_ctx, null, allocator);
 
-        var contentIds = ArrayList([]const u8).init(allocator);
+        var contentIds = ArrayList(AdmAudioContent).init(allocator);
         defer contentIds.deinit();
 
         var acoIter = xpath_nodeset_value("//adm:audioProgramme[1]/adm:audioContentIDRef", xpath_ctx, null);
 
         while (acoIter.next()) |node| {
             const this_id = xpath_string_value("string(./text())", xpath_ctx, node, allocator);
-            contentIds.append(this_id) catch {
+            const audio_content = AdmAudioContent.init(allocator, xpath_ctx, this_id);
+            contentIds.append(audio_content) catch {
                 @panic("ArrayList.append() failed!");
             };
         }
@@ -62,14 +66,14 @@ const AdmAudioProgramme = struct {
 
         try writer.print(" - ContentIDs      : ", .{});
         for (self.audioContentIDs) |element| {
-            try writer.print("{s} ", .{element});
+            try writer.print("{s} (\"{s}\"), ", .{ element.audioContentID, element.audioContentName });
         }
         try writer.print("\n", .{});
     }
 
     fn deinit(self: *@This()) void {
         for (self.audioContentIDs) |id| {
-            self.allocator.free(id);
+            id.deinit();
         }
         self.allocator.free(self.audioContentIDs);
         self.allocator.free(self.audioProgrammeID);
@@ -79,27 +83,40 @@ const AdmAudioProgramme = struct {
     }
 };
 
-// const AdmAudioContent = struct {
-//     audioContentID: []const u8,
-//     allocator: Allocator,
-//
-//     fn init(allocator: Allocator, xpath_ctx: xml.xmlXPathContextPtr) @This() {
-//         _ = xpath_ctx;
-//
-//         return @This(){
-//             .audioContentID = "",
-//             .allocator = allocator,
-//         };
-//     }
-//
-//     fn print(self: @This(), writer: AnyWriter) !void {
-//         try writer.print("Audio Content ID : {s}\n", .{self.audioContentID});
-//     }
-//
-//     fn deinit(self: @This()) void {
-//         self.allocator.free(self.audioContentID);
-//     }
-// };
+const AdmAudioContent = struct {
+    audioContentID: []const u8,
+    audioContentName: []const u8,
+    allocator: Allocator,
+
+    fn init(allocator: Allocator, xpath_ctx: xml.xmlXPathContextPtr, id: []const u8) @This() {
+        const expr = std.fmt.allocPrintZ(allocator, "//adm:audioFormatExtended/adm:audioContent[@audioContentID = \"{s}\"]", .{id}) catch {
+            @panic("Out of memory!");
+        };
+        defer allocator.free(expr);
+
+        const name_expr = std.fmt.allocPrintZ(allocator, "string({s}/@audioContentName)", .{expr}) catch {
+            @panic("Out of memory!");
+        };
+        defer allocator.free(name_expr);
+
+        const name = xpath_string_value(name_expr, xpath_ctx, null, allocator);
+
+        return @This(){
+            .audioContentID = id,
+            .audioContentName = name,
+            .allocator = allocator,
+        };
+    }
+
+    fn print(self: @This(), writer: AnyWriter) !void {
+        try writer.print("Audio Content ID : {s}\n", .{self.audioContentID});
+    }
+
+    fn deinit(self: @This()) void {
+        self.allocator.free(self.audioContentID);
+        self.allocator.free(self.audioContentName);
+    }
+};
 
 pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
     xml.xmlInitParser();
