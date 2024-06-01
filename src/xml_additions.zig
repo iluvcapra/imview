@@ -13,7 +13,7 @@ pub const XPathNodeIter = struct {
     result: xml.xmlXPathObjectPtr,
     i: usize,
 
-    fn init(result: xml.xmlXPathObjectPtr) @This() {
+    pub fn init(result: xml.xmlXPathObjectPtr) @This() {
         if (result.*.type != xml.XPATH_NODESET) {
             @panic("XPathNodeIter init expression did not evaluate to a node set!");
         }
@@ -24,11 +24,11 @@ pub const XPathNodeIter = struct {
         };
     }
 
-    fn empty(self: @This()) bool {
+    pub fn empty(self: @This()) bool {
         return (self.*.nodesetval.*.nodeNr == 0);
     }
 
-    fn next(self: *@This()) ?xml.xmlNodePtr {
+    pub fn next(self: *@This()) ?xml.xmlNodePtr {
         if (self.i >= self.result.*.nodesetval.*.nodeNr) {
             return null;
         } else {
@@ -37,7 +37,7 @@ pub const XPathNodeIter = struct {
         }
     }
 
-    fn deinit(self: @This()) void {
+    pub fn deinit(self: @This()) void {
         xml.xmlXPathFreeObject(self.result);
     }
 };
@@ -73,8 +73,8 @@ fn xpath_eval_with_context_node(expression: []const u8, xpath_ctx: xml.xmlXPathC
 /// The return value must be freed by the caller.
 /// If the query does not result in a string return value, this function will
 /// panic.
-pub fn xpath_string_value(xpath: []const u8, xpath_ctx: xml.xmlXPathContextPtr, allocator: Allocator) []const u8 {
-    const result = xpath_eval_with_context_node(xpath, xpath_ctx, null);
+pub fn xpath_string_value(xpath: []const u8, xpath_ctx: xml.xmlXPathContextPtr, node: ?xml.xmlNodePtr, allocator: Allocator) []const u8 {
+    const result = xpath_eval_with_context_node(xpath, xpath_ctx, node);
     defer xml.xmlXPathFreeObject(result);
 
     switch (result.*.type) {
@@ -97,10 +97,9 @@ pub fn xpath_string_value(xpath: []const u8, xpath_ctx: xml.xmlXPathContextPtr, 
 /// The return value must be freed by the caller.
 /// If the query does not result in a string return value, this function will
 /// panic.
-pub fn xpath_nodeset_value(xpath: []const u8, xpath_ctx: xml.xmlXPathContextPtr) XPathNodeIter {
-    const result = xml.xmlXPathEvalExpression(@ptrCast(xpath), xpath_ctx) orelse {
-        @panic("xmlXPathEvalExpression returned null!");
-    };
+/// The result has to be deinit'ed by the caller.
+pub fn xpath_nodeset_value(xpath: []const u8, xpath_ctx: xml.xmlXPathContextPtr, node: ?xml.xmlNodePtr) XPathNodeIter {
+    const result = xpath_eval_with_context_node(xpath, xpath_ctx, node);
 
     switch (result.*.type) {
         xml.XPATH_NODESET => {
