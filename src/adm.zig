@@ -86,6 +86,7 @@ const AdmAudioProgramme = struct {
 const AdmAudioContent = struct {
     audioContentID: []const u8,
     audioContentName: []const u8,
+    audioObjectIDs: [][]const u8,
     allocator: Allocator,
 
     fn init(allocator: Allocator, xpath_ctx: xml.xmlXPathContextPtr, id: []const u8) @This() {
@@ -101,9 +102,27 @@ const AdmAudioContent = struct {
 
         const name = xpath_string_value(name_expr, xpath_ctx, null, allocator);
 
+        const obj_ref_expr = std.fmt.allocPrintZ(allocator, "{s}/audioObjectIDRef", .{expr}) catch {
+            @panic("Out of memory!");
+        };
+        defer allocator.free(obj_ref_expr);
+
+        var obj_ref_nodes = xpath_nodeset_value(obj_ref_expr, xpath_ctx, null);
+        var obj_refs = ArrayList([]const u8).init(allocator);
+
+        while (obj_ref_nodes.next()) |node| {
+            const obj_id = xpath_string_value("string(./text())", xpath_ctx, node, allocator);
+            obj_refs.append(obj_id) catch {
+                @panic("ArrayList.append() failed!");
+            };
+        }
+
         return @This(){
             .audioContentID = id,
             .audioContentName = name,
+            .audioObjectIDs = obj_refs.toOwnedSlice() catch {
+                @panic("toOwnedSlice() failed!");
+            },
             .allocator = allocator,
         };
     }
@@ -113,8 +132,37 @@ const AdmAudioContent = struct {
     }
 
     fn deinit(self: @This()) void {
+        for (self.audioObjectIDs) |oid| {
+            self.allocator.free(oid);
+        }
+        self.allocator.free(self.audioObjectIDs);
         self.allocator.free(self.audioContentID);
         self.allocator.free(self.audioContentName);
+    }
+};
+
+const AdmAudioObject = struct {
+    audioObjectID: []const u8,
+    audioObjectName: []const u8,
+    start: []const u8,
+    duration: []const u8,
+    audioPackFormatIDs: [][]const u8,
+    audioTrackFormatIDs: [][]const u8,
+    allocator: Allocator,
+
+    fn deinit(self: @This()) void {
+        self.allocator.free(self.audioObjectID);
+        self.allocator.free(self.audioObjectName);
+        self.allocator.free(self.start);
+        self.allocator.free(self.duration);
+        for (self.audioPackFormatIDs) |p| {
+            self.allocator.free(p);
+        }
+        for (self.audioTrackFormatIDs) |t| {
+            self.allocator.free(t);
+        }
+        self.allocator.free(self.audioTrackFormatIDs);
+        self.allocator.free(self.audioPackFormatIDs);
     }
 };
 
