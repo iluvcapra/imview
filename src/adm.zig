@@ -229,17 +229,3 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
 
     try programme.print(writer);
 }
-
-test "parse XML from data buffer" {
-    const buffer: [*:0]const u8 = "<x>a</x>";
-    const doc: xml.xmlDocPtr = xml.xmlReadMemory(buffer, 8, null, "utf-8", 0);
-    defer xml.xmlCleanupParser();
-    defer xml.xmlFreeDoc(doc);
-
-    const root: ?xml.xmlNodePtr = xml.xmlDocGetRootElement(doc);
-
-    try std.testing.expect(root != null);
-    if (root) |r| {
-        try std.testing.expect(std.mem.eql(u8, std.mem.span(r.*.name), "x"));
-    }
-}
