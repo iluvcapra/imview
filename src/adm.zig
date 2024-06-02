@@ -293,6 +293,21 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
     AudioObject.addAll(xpath_ctx, &database);
     AudioPackFormat.addAll(xpath_ctx, &database);
 
+    const print_impl = struct {
+        fn print_pack_formats(pack_format_ids: [][]const u8, db: Database, w: AnyWriter) !void {
+            for (pack_format_ids) |ap_id| {
+                const audio_pack = db.audio_pack_format_map.get(ap_id) orelse {
+                    try w.print("     ? *{s}\n", .{ap_id});
+                    break;
+                };
+                try w.print("     + AudioPackFormat ({s}) \"{s}\" (type: \"{s}\")\n", .{ audio_pack.audioPackFormatID, audio_pack.audioPackFormatName, audio_pack.typeDefinition });
+                for (audio_pack.audioChannelFormatIDs) |chn_id| {
+                    try w.print("       ? *{s}\n", .{chn_id});
+                }
+            }
+        }
+    };
+
     var programme_iter = database.audio_programme_map.valueIterator();
     while (programme_iter.next()) |programme| {
         try writer.print("AudioProgramme ({s}) \"{s}\"\n", .{ programme.audioProgrammeID, programme.audioProgrammeName });
@@ -308,16 +323,7 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
                     break :object_blk;
                 };
                 try writer.print("   + AudioObject ({s}) \"{s}\" (AudioTrackUID count {})\n", .{ audio_object.audioObjectID, audio_object.audioObjectName, audio_object.audioTrackUIDs.len });
-                for (audio_object.audioPackFormatIDs) |ap_id| audio_pack_blk: {
-                    const audio_pack = database.audio_pack_format_map.get(ap_id) orelse {
-                        try writer.print("     ? *{s}\n", .{ap_id});
-                        break :audio_pack_blk;
-                    };
-                    try writer.print("     + AudioPackFormat ({s}) \"{s}\" (type: \"{s}\")\n", .{ audio_pack.audioPackFormatID, audio_pack.audioPackFormatName, audio_pack.typeDefinition });
-                    for (audio_pack.audioChannelFormatIDs) |chn_id| {
-                        try writer.print("       ? *{s}\n", .{chn_id});
-                    }
-                }
+                try print_impl.print_pack_formats(audio_object.audioPackFormatIDs, database, writer);
             }
         }
     }
