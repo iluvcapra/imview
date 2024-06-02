@@ -33,6 +33,13 @@ fn extractRefs(node_expr: []const u8, xpath_ctx: xml.xmlXPathContextPtr, root_no
     };
 }
 
+fn freeStrList(x: [][]const u8, allocator: Allocator) void {
+    for (x) |v| {
+        allocator.free(v);
+    }
+    allocator.free(x);
+}
+
 const Database = struct {
     audio_programme_map: StringHashMap(AudioProgramme),
     audio_content_map: StringHashMap(AudioContent),
@@ -139,10 +146,7 @@ const AudioProgramme = struct {
     }
 
     fn deinit(self: @This()) void {
-        for (self.audioContentIDs) |id| {
-            self.allocator.free(id);
-        }
-        self.allocator.free(self.audioContentIDs);
+        freeStrList(self.audioContentIDs, self.allocator);
         self.allocator.free(self.audioProgrammeID);
         self.allocator.free(self.audioProgrammeName);
         self.allocator.free(self.start);
@@ -173,10 +177,7 @@ const AudioContent = struct {
     }
 
     fn deinit(self: @This()) void {
-        for (self.audioObjectIDs) |oid| {
-            self.allocator.free(oid);
-        }
-        self.allocator.free(self.audioObjectIDs);
+        freeStrList(self.audioObjectIDs, self.allocator);
         self.allocator.free(self.audioContentID);
         self.allocator.free(self.audioContentName);
     }
@@ -219,14 +220,8 @@ const AudioObject = struct {
         self.allocator.free(self.audioObjectName);
         self.allocator.free(self.start);
         self.allocator.free(self.duration);
-        for (self.audioPackFormatIDs) |x| {
-            self.allocator.free(x);
-        }
-        self.allocator.free(self.audioPackFormatIDs);
-        for (self.audioTrackUIDs) |x| {
-            self.allocator.free(x);
-        }
-        self.allocator.free(self.audioTrackUIDs);
+        freeStrList(self.audioPackFormatIDs, self.allocator);
+        freeStrList(self.audioTrackUIDs, self.allocator);
     }
 };
 
@@ -235,6 +230,8 @@ const AudioPackFormat = struct {
     audioPackFormatName: []const u8,
     typeLabel: []const u8,
     typeDefinition: []const u8,
+    audioChannelFormatIDs: [][]const u8,
+    // audioPackFormatIDs: [][]const u8,
     allocator: Allocator,
 
     fn addAll(xpath_ctx: xml.xmlXPathContextPtr, database: *Database) void {
@@ -244,12 +241,14 @@ const AudioPackFormat = struct {
             const name = xpath_string_value("string(./@audioPackFormatName)", xpath_ctx, node, database.allocator);
             const label = xpath_string_value("string(./@typeLabel)", xpath_ctx, node, database.allocator);
             const definition = xpath_string_value("string(./@typeDefinition)", xpath_ctx, node, database.allocator);
+            const channel_refs = extractRefs("./adm:audioChannelFormatIDRef", xpath_ctx, node, database.allocator);
 
             database.insertAudioPackFormat(@This(){
                 .audioPackFormatID = id,
                 .audioPackFormatName = name,
                 .typeLabel = label,
                 .typeDefinition = definition,
+                .audioChannelFormatIDs = channel_refs,
                 .allocator = database.allocator,
             });
         }
@@ -260,6 +259,7 @@ const AudioPackFormat = struct {
         self.allocator.free(self.audioPackFormatName);
         self.allocator.free(self.typeLabel);
         self.allocator.free(self.typeDefinition);
+        freeStrList(self.audioChannelFormatIDs, self.allocator);
     }
 };
 
@@ -314,6 +314,9 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
                         break :audio_pack_blk;
                     };
                     try writer.print("     + AudioPackFormat ({s}) \"{s}\" (type: \"{s}\")\n", .{ audio_pack.audioPackFormatID, audio_pack.audioPackFormatName, audio_pack.typeDefinition });
+                    for (audio_pack.audioChannelFormatIDs) |chn_id| {
+                        try writer.print("       ? *{s}\n", .{chn_id});
+                    }
                 }
             }
         }
