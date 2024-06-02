@@ -2,6 +2,7 @@ const std = @import("std");
 const AnyWriter = std.io.AnyWriter;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
+const StringHashMap = std.hash_map.StringHashMap;
 
 const xml_additions = @import("xml_additions.zig");
 const xpath_string_value = xml_additions.xpath_string_value;
@@ -16,31 +17,37 @@ const xml = @cImport({
     @cInclude("libxml2/libxml/xmlmemory.h");
 });
 
-const AdmAudioProgramme = struct {
+const Database = struct {
+    audio_programme_map: StringHashMap = StringHashMap(AudioProgramme){},
+};
+
+const AudioProgramme = struct {
     audioProgrammeID: []const u8,
     audioProgrammeName: []const u8,
     start: []const u8,
     end: []const u8,
-    audioContentIDs: []AdmAudioContent,
+    audioContentIDs: []AudioContent,
     allocator: Allocator,
 
     fn init(allocator: Allocator, xpath_ctx: xml.xmlXPathContextPtr) @This() {
-        const audioProgrammeID = xpath_string_value("string(//adm:audioFormatExtended/adm:audioProgramme[1]/@audioProgrammeID)", xpath_ctx, null, allocator);
+        const audioProgrammeID = xpath_string_value("string(//adm:audioFormatExtended/" ++
+            "adm:audioProgramme[1]/@audioProgrammeID)", xpath_ctx, null, allocator);
         if (audioProgrammeID.len == 0) {
             @panic("audioProgramme not found!");
         }
-        const audioProgrammeName = xpath_string_value("string(//*/adm:audioProgramme[1]/@audioProgrammeName)", xpath_ctx, null, allocator);
+        const audioProgrammeName = xpath_string_value("string(//*/adm:audioProgramme[1]/" ++
+            "@audioProgrammeName)", xpath_ctx, null, allocator);
         const start = xpath_string_value("string(//*/adm:audioProgramme[1]/@start)", xpath_ctx, null, allocator);
         const end = xpath_string_value("string(//*/adm:audioProgramme[1]/@end)", xpath_ctx, null, allocator);
 
-        var contentIds = ArrayList(AdmAudioContent).init(allocator);
+        var contentIds = ArrayList(AudioContent).init(allocator);
         defer contentIds.deinit();
 
         var acoIter = xpath_nodeset_value("//adm:audioProgramme[1]/adm:audioContentIDRef", xpath_ctx, null);
 
         while (acoIter.next()) |node| {
             const this_id = xpath_string_value("string(./text())", xpath_ctx, node, allocator);
-            const audio_content = AdmAudioContent.init(allocator, xpath_ctx, this_id);
+            const audio_content = AudioContent.init(allocator, xpath_ctx, this_id);
             contentIds.append(audio_content) catch {
                 @panic("ArrayList.append() failed!");
             };
@@ -93,14 +100,15 @@ const AdmAudioProgramme = struct {
     }
 };
 
-const AdmAudioContent = struct {
+const AudioContent = struct {
     audioContentID: []const u8,
     audioContentName: []const u8,
     audioObjectIDs: [][]const u8,
     allocator: Allocator,
 
     fn init(allocator: Allocator, xpath_ctx: xml.xmlXPathContextPtr, id: []const u8) @This() {
-        const expr = std.fmt.allocPrintZ(allocator, "//adm:audioFormatExtended/adm:audioContent[@audioContentID = \"{s}\"]", .{id}) catch {
+        const expr = std.fmt.allocPrintZ(allocator, "//adm:audioFormatExtended/" ++
+            "adm:audioContent[@audioContentID = \"{s}\"]", .{id}) catch {
             @panic("Out of memory!");
         };
         defer allocator.free(expr);
@@ -151,7 +159,7 @@ const AdmAudioContent = struct {
     }
 };
 
-const AdmAudioObject = struct {
+const AudioObject = struct {
     audioObjectID: []const u8,
     audioObjectName: []const u8,
     // start: []const u8,
@@ -216,7 +224,7 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
         @panic("xmlXPathRegisterNs Failed!");
     }
 
-    var programme = AdmAudioProgramme.init(allocator, xpath_ctx);
+    var programme = AudioProgramme.init(allocator, xpath_ctx);
     defer programme.deinit();
 
     try programme.print(writer);
