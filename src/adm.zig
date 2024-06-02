@@ -179,8 +179,9 @@ const AudioObject = struct {
     audioObjectName: []const u8,
     start: []const u8,
     duration: []const u8,
-    // audioPackFormatIDs: [][]const u8,
-    // audioTrackFormatIDs: [][]const u8,
+    audioPackFormatIDs: [][]const u8,
+    // audioTrackUIDs: [][]const u8,
+    // audioObjectIDs: [][]const u8,
     allocator: Allocator,
 
     fn add_all(xpath_ctx: xml.xmlXPathContextPtr, database: *Database) void {
@@ -190,11 +191,23 @@ const AudioObject = struct {
             const name = xpath_string_value("string(./@audioObjectName)", xpath_ctx, node, database.allocator);
             const start = xpath_string_value("string(./@start)", xpath_ctx, node, database.allocator);
             const duration = xpath_string_value("string(./@duration)", xpath_ctx, node, database.allocator);
+            var pfi = xpath_nodeset_value("./audioPackFormatIDRef", xpath_ctx, node);
+            var pack_format_refs = ArrayList([]const u8).init(database.allocator);
+            defer pack_format_refs.deinit();
+            while (pfi.next()) |pfi_node| {
+                const pack_format = xpath_string_value("string(./text())", xpath_ctx, pfi_node, database.allocator);
+                pack_format_refs.append(pack_format) catch {
+                    @panic("append() failed!");
+                };
+            }
             database.insertAudioObject(@This(){
                 .audioObjectID = id,
                 .audioObjectName = name,
                 .start = start,
                 .duration = duration,
+                .audioPackFormatIDs = pack_format_refs.toOwnedSlice() catch {
+                    @panic("append() failed!");
+                },
                 .allocator = database.allocator,
             });
         }
@@ -242,16 +255,16 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
         try writer.print("AudioProgramme ({s}) \"{s}\"\n", .{ programme.audioProgrammeID, programme.audioProgrammeName });
         for (programme.audioContentIDs) |ac_id| content_blk: {
             const audio_content = database.audio_content_map.get(ac_id) orelse {
-                try writer.print(" - !! DANGLING REFERENCE AudioContent *{s}\n", .{ac_id});
+                try writer.print(" ? *{s}\n", .{ac_id});
                 break :content_blk;
             };
-            try writer.print(" - AudioContent ({s}) \"{s}\"\n", .{ audio_content.audioContentID, audio_content.audioContentName });
+            try writer.print(" + AudioContent ({s}) \"{s}\"\n", .{ audio_content.audioContentID, audio_content.audioContentName });
             for (audio_content.audioObjectIDs) |ao_id| object_blk: {
                 const audio_object = database.audio_object_map.get(ao_id) orelse {
-                    try writer.print("   - !! DANGLING REFERENCE AudioObject *{s}\n", .{ao_id});
+                    try writer.print("   ? *{s}\n", .{ao_id});
                     break :object_blk;
                 };
-                try writer.print("   - AudioObject ({s}) \"{s}\"\n", .{ audio_object.audioObjectID, audio_object.audioObjectName });
+                try writer.print("   + AudioObject ({s}) \"{s}\"\n", .{ audio_object.audioObjectID, audio_object.audioObjectName });
             }
         }
     }
