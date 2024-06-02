@@ -18,7 +18,49 @@ const xml = @cImport({
 });
 
 const Database = struct {
-    audio_programme_map: StringHashMap = StringHashMap(AudioProgramme){},
+    audio_programme_map: StringHashMap(AudioProgramme),
+    audio_content_map: StringHashMap(AudioContent),
+    allocator: Allocator,
+
+    fn init(allocator: Allocator) @This() {
+        const audio_programme_map = StringHashMap(AudioProgramme).init(allocator);
+        const audio_content_map = StringHashMap(AudioContent).init(allocator);
+
+        return @This(){
+            .audio_programme_map = audio_programme_map,
+            .audio_content_map = audio_content_map,
+            .allocator = allocator,
+        };
+    }
+
+    fn insertAudioProgramme(self: *@This(), programme: AudioProgramme) void {
+        self.audio_programme_map.put(programme.audioProgrammeID, programme) catch {
+            @panic("HashMap.put() failed!");
+        };
+    }
+
+    fn insertAudioContent(self: *@This(), content: AudioContent) void {
+        self.audio_content_map.put(content.audioContentID, content) catch {
+            @panic("HashMap.put() failed!");
+        };
+    }
+
+    fn deinit(self: *@This()) void {
+        {
+            var i = self.audio_programme_map.valueIterator();
+            while (i.next()) |v| {
+                v.deinit();
+            }
+            self.audio_programme_map.deinit();
+        }
+        {
+            var i = self.audio_content_map.valueIterator();
+            while (i.next()) |v| {
+                v.deinit();
+            }
+            self.audio_content_map.deinit();
+        }
+    }
 };
 
 const AudioProgramme = struct {
@@ -26,7 +68,7 @@ const AudioProgramme = struct {
     audioProgrammeName: []const u8,
     start: []const u8,
     end: []const u8,
-    audioContentIDs: []AudioContent,
+    audioContentIDs: [][]const u8,
     allocator: Allocator,
 
     fn init(allocator: Allocator, xpath_ctx: xml.xmlXPathContextPtr) @This() {
@@ -40,15 +82,14 @@ const AudioProgramme = struct {
         const start = xpath_string_value("string(//*/adm:audioProgramme[1]/@start)", xpath_ctx, null, allocator);
         const end = xpath_string_value("string(//*/adm:audioProgramme[1]/@end)", xpath_ctx, null, allocator);
 
-        var contentIds = ArrayList(AudioContent).init(allocator);
+        var contentIds = ArrayList([]const u8).init(allocator);
         defer contentIds.deinit();
 
         var acoIter = xpath_nodeset_value("//adm:audioProgramme[1]/adm:audioContentIDRef", xpath_ctx, null);
 
         while (acoIter.next()) |node| {
             const this_id = xpath_string_value("string(./text())", xpath_ctx, node, allocator);
-            const audio_content = AudioContent.init(allocator, xpath_ctx, this_id);
-            contentIds.append(audio_content) catch {
+            contentIds.append(this_id) catch {
                 @panic("ArrayList.append() failed!");
             };
         }
@@ -65,32 +106,9 @@ const AudioProgramme = struct {
         };
     }
 
-    fn print(self: @This(), writer: AnyWriter) !void {
-        try writer.print("Audio Programme ID : {s}\n", .{self.audioProgrammeID});
-        try writer.print(" - Programme Name  : {s}\n", .{self.audioProgrammeName});
-        try writer.print(" - Start           : {s}\n", .{self.start});
-        try writer.print(" - End             : {s}\n", .{self.end});
-
-        try writer.print(" - ContentIDs      : ", .{});
-        for (self.audioContentIDs) |element| {
-            try writer.print("{s} (\"{s}\"), ", .{ element.audioContentID, element.audioContentName });
-        }
-        try writer.print("\n ---------- \n", .{});
-
-        for (self.audioContentIDs) |element| {
-            try writer.print("Audio Content ID   : {s}\n", .{element.audioContentID});
-            try writer.print(" - Name            : {s}\n", .{element.audioContentName});
-            try writer.print(" - Objects         : ", .{});
-            for (element.audioObjectIDs) |object| {
-                try writer.print("{s}, ", .{object});
-            }
-            try writer.print("\n", .{});
-        }
-    }
-
-    fn deinit(self: *@This()) void {
+    fn deinit(self: @This()) void {
         for (self.audioContentIDs) |id| {
-            id.deinit();
+            self.allocator.free(id);
         }
         self.allocator.free(self.audioContentIDs);
         self.allocator.free(self.audioProgrammeID);
@@ -106,47 +124,28 @@ const AudioContent = struct {
     audioObjectIDs: [][]const u8,
     allocator: Allocator,
 
-    fn init(allocator: Allocator, xpath_ctx: xml.xmlXPathContextPtr, id: []const u8) @This() {
-        const expr = std.fmt.allocPrintZ(allocator, "//adm:audioFormatExtended/" ++
-            "adm:audioContent[@audioContentID = \"{s}\"]", .{id}) catch {
-            @panic("Out of memory!");
-        };
-        defer allocator.free(expr);
-
-        const name_expr = std.fmt.allocPrintZ(allocator, "string({s}/@audioContentName)", .{expr}) catch {
-            @panic("Out of memory!");
-        };
-        defer allocator.free(name_expr);
-
-        const name = xpath_string_value(name_expr, xpath_ctx, null, allocator);
-
-        const obj_ref_expr = std.fmt.allocPrintZ(allocator, "{s}/adm:audioObjectIDRef", .{expr}) catch {
-            @panic("Out of memory!");
-        };
-        defer allocator.free(obj_ref_expr);
-
-        var obj_ref_nodes = xpath_nodeset_value(obj_ref_expr, xpath_ctx, null);
-        var obj_refs = ArrayList([]const u8).init(allocator);
-
-        while (obj_ref_nodes.next()) |node| {
-            const obj_id = xpath_string_value("string(./text())", xpath_ctx, node, allocator);
-            obj_refs.append(obj_id) catch {
-                @panic("ArrayList.append() failed!");
-            };
+    fn add_all(xpath_ctx: xml.xmlXPathContextPtr, database: *Database) void {
+        var content_iter = xpath_nodeset_value("//adm:audioFormatExtended/adm:audioContent", xpath_ctx, null);
+        while (content_iter.next()) |node| {
+            const id = xpath_string_value("string(./@audioContentID)", xpath_ctx, node, database.allocator);
+            const name = xpath_string_value("string(./@audioContentName)", xpath_ctx, node, database.allocator);
+            var obj_refs = ArrayList([]const u8).init(database.allocator);
+            var obj_ref_nodes = xpath_nodeset_value("./adm:audioObjectIDRef", xpath_ctx, node);
+            while (obj_ref_nodes.next()) |obj_ref_node| {
+                const obj_ref = xpath_string_value("string(./text())", xpath_ctx, obj_ref_node, database.allocator);
+                obj_refs.append(obj_ref) catch {
+                    @panic("ArrayList append() failed!");
+                };
+            }
+            database.insertAudioContent(@This(){
+                .audioContentID = id,
+                .audioContentName = name,
+                .audioObjectIDs = obj_refs.toOwnedSlice() catch {
+                    @panic("toOwnedSlice() failed!");
+                },
+                .allocator = database.allocator,
+            });
         }
-
-        return @This(){
-            .audioContentID = id,
-            .audioContentName = name,
-            .audioObjectIDs = obj_refs.toOwnedSlice() catch {
-                @panic("toOwnedSlice() failed!");
-            },
-            .allocator = allocator,
-        };
-    }
-
-    fn print(self: @This(), writer: AnyWriter) !void {
-        try writer.print("Audio Content ID : {s}\n", .{self.audioContentID});
     }
 
     fn deinit(self: @This()) void {
@@ -180,8 +179,6 @@ const AudioObject = struct {
         return @This(){
             .audioObjectID = id,
             .audioObjectName = name,
-            // .start = "".*,
-            // .duration = "".*,
             .allocator = allocator,
         };
     }
@@ -189,20 +186,11 @@ const AudioObject = struct {
     fn deinit(self: @This()) void {
         self.allocator.free(self.audioObjectID);
         self.allocator.free(self.audioObjectName);
-        // self.allocator.free(self.start);
-        // self.allocator.free(self.duration);
-        // for (self.audioPackFormatIDs) |p| {
-        //     self.allocator.free(p);
-        // }
-        // for (self.audioTrackFormatIDs) |t| {
-        //     self.allocator.free(t);
-        // }
-        // self.allocator.free(self.audioTrackFormatIDs);
-        // self.allocator.free(self.audioPackFormatIDs);
     }
 };
 
 pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
+    _ = writer;
     xml.xmlInitParser();
     defer xml.xmlCleanupParser();
 
@@ -224,8 +212,11 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
         @panic("xmlXPathRegisterNs Failed!");
     }
 
-    var programme = AudioProgramme.init(allocator, xpath_ctx);
-    defer programme.deinit();
+    const programme = AudioProgramme.init(allocator, xpath_ctx);
 
-    try programme.print(writer);
+    var database = Database.init(allocator);
+    defer database.deinit();
+
+    database.insertAudioProgramme(programme);
+    AudioContent.add_all(xpath_ctx, &database);
 }
