@@ -177,8 +177,8 @@ const AudioContent = struct {
 const AudioObject = struct {
     audioObjectID: []const u8,
     audioObjectName: []const u8,
-    // start: []const u8,
-    // duration: []const u8,
+    start: []const u8,
+    duration: []const u8,
     // audioPackFormatIDs: [][]const u8,
     // audioTrackFormatIDs: [][]const u8,
     allocator: Allocator,
@@ -188,33 +188,23 @@ const AudioObject = struct {
         while (object_iter.next()) |node| {
             const id = xpath_string_value("string(./@audioObjectID)", xpath_ctx, node, database.allocator);
             const name = xpath_string_value("string(./@audioObjectName)", xpath_ctx, node, database.allocator);
+            const start = xpath_string_value("string(./@start)", xpath_ctx, node, database.allocator);
+            const duration = xpath_string_value("string(./@duration)", xpath_ctx, node, database.allocator);
             database.insertAudioObject(@This(){
                 .audioObjectID = id,
                 .audioObjectName = name,
+                .start = start,
+                .duration = duration,
                 .allocator = database.allocator,
             });
         }
     }
 
-    fn init(allocator: Allocator, xpath_ctx: xml.xmlXPathContextPtr, id: []const u8) @This() {
-        const expr = std.fmt.allocPrintZ(allocator, "//adm:audioObject/[@audioObjectID = \"{s}\"]", .{id});
-        defer allocator.free(expr);
-
-        const name_expr = std.fmt.allocPrintZ(allocator, "string({s}/@audioObjectName)", .{expr});
-        defer allocator.free(name_expr);
-
-        const name = xpath_string_value(name_expr, xpath_ctx, null, allocator);
-
-        return @This(){
-            .audioObjectID = id,
-            .audioObjectName = name,
-            .allocator = allocator,
-        };
-    }
-
     fn deinit(self: @This()) void {
         self.allocator.free(self.audioObjectID);
         self.allocator.free(self.audioObjectName);
+        self.allocator.free(self.start);
+        self.allocator.free(self.duration);
     }
 };
 
