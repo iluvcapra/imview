@@ -68,7 +68,17 @@ const AdmAudioProgramme = struct {
         for (self.audioContentIDs) |element| {
             try writer.print("{s} (\"{s}\"), ", .{ element.audioContentID, element.audioContentName });
         }
-        try writer.print("\n", .{});
+        try writer.print("\n ---------- \n", .{});
+
+        for (self.audioContentIDs) |element| {
+            try writer.print("Audio Content ID   : {s}\n", .{element.audioContentID});
+            try writer.print(" - Name            : {s}\n", .{element.audioContentName});
+            try writer.print(" - Objects         : ", .{});
+            for (element.audioObjectIDs) |object| {
+                try writer.print("{s}, ", .{object});
+            }
+            try writer.print("\n", .{});
+        }
     }
 
     fn deinit(self: *@This()) void {
@@ -102,7 +112,7 @@ const AdmAudioContent = struct {
 
         const name = xpath_string_value(name_expr, xpath_ctx, null, allocator);
 
-        const obj_ref_expr = std.fmt.allocPrintZ(allocator, "{s}/audioObjectIDRef", .{expr}) catch {
+        const obj_ref_expr = std.fmt.allocPrintZ(allocator, "{s}/adm:audioObjectIDRef", .{expr}) catch {
             @panic("Out of memory!");
         };
         defer allocator.free(obj_ref_expr);
@@ -144,25 +154,43 @@ const AdmAudioContent = struct {
 const AdmAudioObject = struct {
     audioObjectID: []const u8,
     audioObjectName: []const u8,
-    start: []const u8,
-    duration: []const u8,
-    audioPackFormatIDs: [][]const u8,
-    audioTrackFormatIDs: [][]const u8,
+    // start: []const u8,
+    // duration: []const u8,
+    // audioPackFormatIDs: [][]const u8,
+    // audioTrackFormatIDs: [][]const u8,
     allocator: Allocator,
+
+    fn init(allocator: Allocator, xpath_ctx: xml.xmlXPathContextPtr, id: []const u8) @This() {
+        const expr = std.fmt.allocPrintZ(allocator, "//adm:audioObject/[@audioObjectID = \"{s}\"]", .{id});
+        defer allocator.free(expr);
+
+        const name_expr = std.fmt.allocPrintZ(allocator, "string({s}/@audioObjectName)", .{expr});
+        defer allocator.free(name_expr);
+
+        const name = xpath_string_value(name_expr, xpath_ctx, null, allocator);
+
+        return @This(){
+            .audioObjectID = id,
+            .audioObjectName = name,
+            // .start = "".*,
+            // .duration = "".*,
+            .allocator = allocator,
+        };
+    }
 
     fn deinit(self: @This()) void {
         self.allocator.free(self.audioObjectID);
         self.allocator.free(self.audioObjectName);
-        self.allocator.free(self.start);
-        self.allocator.free(self.duration);
-        for (self.audioPackFormatIDs) |p| {
-            self.allocator.free(p);
-        }
-        for (self.audioTrackFormatIDs) |t| {
-            self.allocator.free(t);
-        }
-        self.allocator.free(self.audioTrackFormatIDs);
-        self.allocator.free(self.audioPackFormatIDs);
+        // self.allocator.free(self.start);
+        // self.allocator.free(self.duration);
+        // for (self.audioPackFormatIDs) |p| {
+        //     self.allocator.free(p);
+        // }
+        // for (self.audioTrackFormatIDs) |t| {
+        //     self.allocator.free(t);
+        // }
+        // self.allocator.free(self.audioTrackFormatIDs);
+        // self.allocator.free(self.audioPackFormatIDs);
     }
 };
 
