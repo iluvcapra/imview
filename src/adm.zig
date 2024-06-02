@@ -45,6 +45,7 @@ const Database = struct {
     audio_content_map: StringHashMap(AudioContent),
     audio_object_map: StringHashMap(AudioObject),
     audio_pack_format_map: StringHashMap(AudioPackFormat),
+    audio_channel_format_map: StringHashMap(AudioChannelFormat),
     allocator: Allocator,
 
     fn init(allocator: Allocator) @This() {
@@ -52,12 +53,14 @@ const Database = struct {
         const audio_content_map = StringHashMap(AudioContent).init(allocator);
         const audio_object_map = StringHashMap(AudioObject).init(allocator);
         const audio_pack_format_map = StringHashMap(AudioPackFormat).init(allocator);
+        const audio_channel_format_map = StringHashMap(AudioChannelFormat).init(allocator);
 
         return @This(){
             .audio_programme_map = audio_programme_map,
             .audio_content_map = audio_content_map,
             .audio_object_map = audio_object_map,
             .audio_pack_format_map = audio_pack_format_map,
+            .audio_channel_format_map = audio_channel_format_map,
             .allocator = allocator,
         };
     }
@@ -86,6 +89,12 @@ const Database = struct {
         };
     }
 
+    fn insertAudioChannelFormat(self: *@This(), channel_format: AudioChannelFormat) void {
+        self.audio_channel_format_map.put(channel_format.audioChannelFormatID, channel_format) catch {
+            @panic("HashMap.put() failed!");
+        };
+    }
+
     fn freeMap(comptime T: type, m: *StringHashMap(T)) void {
         var i = m.valueIterator();
         while (i.next()) |v| {
@@ -99,6 +108,7 @@ const Database = struct {
         freeMap(AudioContent, &self.audio_content_map);
         freeMap(AudioObject, &self.audio_object_map);
         freeMap(AudioPackFormat, &self.audio_pack_format_map);
+        freeMap(AudioChannelFormat, &self.audio_channel_format_map);
     }
 };
 
@@ -263,6 +273,39 @@ const AudioPackFormat = struct {
     }
 };
 
+const AudioChannelFormat = struct {
+    audioChannelFormatID: []const u8,
+    audioChannelFormatName: []const u8,
+    typeLabel: []const u8,
+    typeDefinition: []const u8,
+    allocator: Allocator,
+
+    fn addAll(xpath_ctx: xml.xmlXPathContextPtr, database: *Database) void {
+        var object_iter = xpath_nodeset_value("//adm:audioFormatExtended/adm:audioChannelFormat", xpath_ctx, null);
+        while (object_iter.next()) |node| {
+            const id = xpath_string_value("string(./@audioChannelFormatID)", xpath_ctx, node, database.allocator);
+            const name = xpath_string_value("string(./@audioChannelFormatName)", xpath_ctx, node, database.allocator);
+            const label = xpath_string_value("string(./@typeLabel)", xpath_ctx, node, database.allocator);
+            const definition = xpath_string_value("string(./@typeDefinition)", xpath_ctx, node, database.allocator);
+
+            database.insertAudioChannelFormat(@This(){
+                .audioChannelFormatID = id,
+                .audioChannelFormatName = name,
+                .typeLabel = label,
+                .typeDefinition = definition,
+                .allocator = database.allocator,
+            });
+        }
+    }
+
+    fn deinit(self: @This()) void {
+        self.allocator.free(self.audioChannelFormatID);
+        self.allocator.free(self.audioChannelFormatName);
+        self.allocator.free(self.typeLabel);
+        self.allocator.free(self.typeDefinition);
+    }
+};
+
 pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
     xml.xmlInitParser();
     defer xml.xmlCleanupParser();
@@ -292,21 +335,7 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
     AudioContent.addAll(xpath_ctx, &database);
     AudioObject.addAll(xpath_ctx, &database);
     AudioPackFormat.addAll(xpath_ctx, &database);
-
-    const print_impl = struct {
-        fn print_pack_formats(pack_format_ids: [][]const u8, db: Database, w: AnyWriter) !void {
-            for (pack_format_ids) |ap_id| {
-                const audio_pack = db.audio_pack_format_map.get(ap_id) orelse {
-                    try w.print("     ? *{s}\n", .{ap_id});
-                    break;
-                };
-                try w.print("     + AudioPackFormat ({s}) \"{s}\" (type: \"{s}\")\n", .{ audio_pack.audioPackFormatID, audio_pack.audioPackFormatName, audio_pack.typeDefinition });
-                for (audio_pack.audioChannelFormatIDs) |chn_id| {
-                    try w.print("       ? *{s}\n", .{chn_id});
-                }
-            }
-        }
-    };
+    AudioChannelFormat.addAll(xpath_ctx, &database);
 
     var programme_iter = database.audio_programme_map.valueIterator();
     while (programme_iter.next()) |programme| {
@@ -317,13 +346,27 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
                 break :content_blk;
             };
             try writer.print(" + AudioContent ({s}) \"{s}\"\n", .{ audio_content.audioContentID, audio_content.audioContentName });
-            for (audio_content.audioObjectIDs) |ao_id| object_blk: {
+            for (audio_content.audioObjectIDs) |ao_id| obj_blk: {
                 const audio_object = database.audio_object_map.get(ao_id) orelse {
                     try writer.print("   ? *{s}\n", .{ao_id});
-                    break :object_blk;
+                    break :obj_blk;
                 };
                 try writer.print("   + AudioObject ({s}) \"{s}\" (AudioTrackUID count {})\n", .{ audio_object.audioObjectID, audio_object.audioObjectName, audio_object.audioTrackUIDs.len });
-                try print_impl.print_pack_formats(audio_object.audioPackFormatIDs, database, writer);
+                for (audio_object.audioPackFormatIDs) |ap_id| {
+                    const audio_pack = database.audio_pack_format_map.get(ap_id) orelse {
+                        try writer.print("     ? *{s}\n", .{ap_id});
+                        break;
+                    };
+                    try writer.print("     + AudioPackFormat ({s}) \"{s}\" (type: \"{s}\")\n", .{ audio_pack.audioPackFormatID, audio_pack.audioPackFormatName, audio_pack.typeDefinition });
+                    for (audio_pack.audioChannelFormatIDs) |chn_id| chn_blk: {
+                        const audio_channel = database.audio_channel_format_map.get(chn_id) orelse {
+                            try writer.print("       ? *{s}\n", .{chn_id});
+                            break :chn_blk;
+                        };
+
+                        try writer.print("       + AudioChannelFormat ({s}) \"{s}\"\n", .{ audio_channel.audioChannelFormatID, audio_channel.audioChannelFormatName });
+                    }
+                }
             }
         }
     }
