@@ -26,7 +26,9 @@ fn processArg(mode: Mode, file: []const u8, allocator: std.mem.Allocator) !void 
             if (try wave.read_chunk(file, "axml", allocator)) |adm_xml| {
                 defer allocator.free(adm_xml);
                 try adm.print_adm_xml_summary(adm_xml, std.io.getStdOut().writer().any());
-            } else {}
+            } else {
+                std.debug.print("File {s} not an ADM file. Skipping.\n", .{file});
+            }
         },
         Mode.print_tracks => {
             std.debug.print("`tracks` mode not implemented.\n", .{});
