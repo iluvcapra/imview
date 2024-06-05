@@ -29,7 +29,9 @@ fn processArg(mode: Mode, file: []const u8, allocator: std.mem.Allocator) !void 
                 try adm.print_adm_xml_summary(adm_xml, std.io.getStdOut().writer().any());
             } else {}
         },
-        else => {},
+        Mode.print_tracks => {
+            std.debug.print("`tracks` mode not implemented.\n", .{});
+        },
     }
 }
 
