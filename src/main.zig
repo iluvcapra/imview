@@ -10,7 +10,6 @@ const Mode = enum {
     print_tracks,
 
     fn fromArg(arg: []const u8) ?@This() {
-        // const arg_span = std.mem.span(arg);
         if (std.mem.startsWith(u8, arg, "pro")) {
             return @This().print_programme;
         } else if (std.mem.startsWith(u8, arg, "tr")) {
@@ -59,7 +58,6 @@ pub fn main() !void {
                 }
             },
             else => {
-                // const file = std.mem.span(arg);
                 try processArg(mode, arg, allocator);
             },
         }
