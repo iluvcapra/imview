@@ -420,7 +420,7 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter, allocator: 
                     try writer.print("   ? *{s}\n", .{ao_id});
                     break :obj_blk;
                 };
-                try writer.print("   + AudioObject ({s}) \"{s}\" (AudioTrackUID count {})\n", .{ audio_object.audioObjectID, audio_object.audioObjectName, audio_object.audioTrackUIDs.len });
+                try writer.print("   -> AudioObject ({s}) \"{s}\" (AudioTrackUID count {})\n", .{ audio_object.audioObjectID, audio_object.audioObjectName, audio_object.audioTrackUIDs.len });
                 for (audio_object.audioPackFormatIDs) |ap_id| {
                     const audio_pack = database.audio_pack_format_map.get(ap_id) orelse {
                         try writer.print("     ? *{s}\n", .{ap_id});
