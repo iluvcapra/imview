@@ -428,7 +428,7 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter, allocator: 
                         try writer.print("       + AudioChannelFormat ({s}) \"{s}\"\n", .{ audio_channel.audioChannelFormatID, audio_channel.audioChannelFormatName });
 
                         if (database.audio_channel_to_stream_format_map.get(chn_id)) |stream| {
-                            try writer.print("         + AudioStreamFormat ({s})\n", .{stream.audioStreamFormatID});
+                            try writer.print("         -> AudioStreamFormat ({s})\n", .{stream.audioStreamFormatID});
                         } else {
                             try writer.print("         ! No AudioStreamFormat\n", .{});
                         }
