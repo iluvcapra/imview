@@ -46,6 +46,8 @@ const Database = struct {
     audio_object_map: StringHashMap(AudioObject),
     audio_pack_format_map: StringHashMap(AudioPackFormat),
     audio_channel_format_map: StringHashMap(AudioChannelFormat),
+    audio_stream_format_map: StringHashMap(AudioStreamFormat),
+    audio_channel_to_stream_format_map: StringHashMap(AudioStreamFormat),
     allocator: Allocator,
 
     fn init(allocator: Allocator) @This() {
@@ -54,6 +56,8 @@ const Database = struct {
         const audio_object_map = StringHashMap(AudioObject).init(allocator);
         const audio_pack_format_map = StringHashMap(AudioPackFormat).init(allocator);
         const audio_channel_format_map = StringHashMap(AudioChannelFormat).init(allocator);
+        const audio_stream_format_map = StringHashMap(AudioStreamFormat).init(allocator);
+        const audio_channel_to_stream_format_map = StringHashMap(AudioStreamFormat).init(allocator);
 
         return @This(){
             .audio_programme_map = audio_programme_map,
@@ -61,6 +65,8 @@ const Database = struct {
             .audio_object_map = audio_object_map,
             .audio_pack_format_map = audio_pack_format_map,
             .audio_channel_format_map = audio_channel_format_map,
+            .audio_stream_format_map = audio_stream_format_map,
+            .audio_channel_to_stream_format_map = audio_channel_to_stream_format_map,
             .allocator = allocator,
         };
     }
@@ -95,6 +101,17 @@ const Database = struct {
         };
     }
 
+    fn insertAudioStreamFormat(self: *@This(), stream_format: AudioStreamFormat) void {
+        self.audio_stream_format_map.put(stream_format.audioStreamFormatID, stream_format) catch {
+            @panic("HashMap.put() failed!");
+        };
+        if (stream_format.audioChannelFormatID) |chan_id| {
+            self.audio_channel_to_stream_format_map.put(chan_id, stream_format) catch {
+                @panic("HashMap.put() failed!");
+            };
+        }
+    }
+
     fn freeMap(comptime T: type, m: *StringHashMap(T)) void {
         var i = m.valueIterator();
         while (i.next()) |v| {
@@ -109,6 +126,9 @@ const Database = struct {
         freeMap(AudioObject, &self.audio_object_map);
         freeMap(AudioPackFormat, &self.audio_pack_format_map);
         freeMap(AudioChannelFormat, &self.audio_channel_format_map);
+        freeMap(AudioStreamFormat, &self.audio_stream_format_map);
+
+        self.audio_channel_to_stream_format_map.deinit();
     }
 };
 
@@ -306,13 +326,53 @@ const AudioChannelFormat = struct {
     }
 };
 
-pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
+const AudioStreamFormat = struct {
+    audioStreamFormatID: []const u8,
+    //audioStreamFormatName: []const u8,
+    audioChannelFormatID: ?[]const u8,
+    audioTrackFormatIDs: [][]const u8,
+    allocator: Allocator,
+
+    fn addAll(xpath_ctx: xml.xmlXPathContextPtr, database: *Database) void {
+        var object_iter = xpath_nodeset_value("//adm:audioFormatExtended/adm:audioStreamFormat", xpath_ctx, null);
+
+        while (object_iter.next()) |node| {
+            const id = xpath_string_value("string(./@audioStreamFormatID)", xpath_ctx, node, database.allocator);
+
+            var get_chan_fmt = xpath_nodeset_value("./adm:audioChannelFormatIDRef", xpath_ctx, node);
+            var chan_fmt_id: ?[]const u8 = null;
+
+            if (get_chan_fmt.next()) |chan_fmt_node| {
+                chan_fmt_id = xpath_string_value("string(.)", xpath_ctx, chan_fmt_node, database.allocator);
+            }
+
+            const track_format_uid_refs = extractRefs("./adm:audioTrackFormatIDRef", xpath_ctx, node, database.allocator);
+
+            database.insertAudioStreamFormat(@This(){
+                .audioStreamFormatID = id,
+                .audioChannelFormatID = chan_fmt_id,
+                .audioTrackFormatIDs = track_format_uid_refs,
+                .allocator = database.allocator,
+            });
+        }
+    }
+
+    fn deinit(self: @This()) void {
+        self.allocator.free(self.audioStreamFormatID);
+        if (self.audioChannelFormatID) |r| {
+            self.allocator.free(r);
+        }
+        freeStrList(self.audioTrackFormatIDs, self.allocator);
+    }
+};
+
+pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter, allocator: Allocator) !void {
     xml.xmlInitParser();
     defer xml.xmlCleanupParser();
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-    defer _ = gpa.deinit();
+    // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    // const allocator = gpa.allocator();
+    // defer _ = gpa.deinit();
 
     const doc: xml.xmlDocPtr = xml.xmlReadMemory(@ptrCast(adm_xml), @intCast(adm_xml.len), null, "utf-8", 0) orelse {
         @panic("axml could not be parsed!");
@@ -336,6 +396,7 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
     AudioObject.addAll(xpath_ctx, &database);
     AudioPackFormat.addAll(xpath_ctx, &database);
     AudioChannelFormat.addAll(xpath_ctx, &database);
+    AudioStreamFormat.addAll(xpath_ctx, &database);
 
     var programme_iter = database.audio_programme_map.valueIterator();
     while (programme_iter.next()) |programme| {
@@ -365,6 +426,12 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter) !void {
                         };
 
                         try writer.print("       + AudioChannelFormat ({s}) \"{s}\"\n", .{ audio_channel.audioChannelFormatID, audio_channel.audioChannelFormatName });
+
+                        if (database.audio_channel_to_stream_format_map.get(chn_id)) |stream| {
+                            try writer.print("         + AudioStreamFormat ({s})\n", .{stream.audioStreamFormatID});
+                        } else {
+                            try writer.print("         ! No AudioStreamFormat\n", .{});
+                        }
                     }
                 }
             }
