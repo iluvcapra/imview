@@ -366,13 +366,21 @@ const AudioStreamFormat = struct {
     }
 };
 
+const AudioTrack = struct {
+    audioTrackFormatID: []const u8,
+    allocator: Allocator,
+};
+
+const AudioTrackUID = struct {
+    audioTrackFormatUID: []const u8,
+    audioTrackFormatID: ?[]const u8,
+    track_index: u16,
+    allocator: Allocator,
+};
+
 pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter, allocator: Allocator) !void {
     xml.xmlInitParser();
     defer xml.xmlCleanupParser();
-
-    // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    // const allocator = gpa.allocator();
-    // defer _ = gpa.deinit();
 
     const doc: xml.xmlDocPtr = xml.xmlReadMemory(@ptrCast(adm_xml), @intCast(adm_xml.len), null, "utf-8", 0) orelse {
         @panic("axml could not be parsed!");

@@ -52,5 +52,4 @@ AudioProgramme (APR_1001) "Atmos_Master"
      + AudioPackFormat (AP_00031004) "Atmos_Obj_4" (type: "Objects")
        + AudioChannelFormat (AC_00031004) "Atmos_Obj_4"
          -> AudioStreamFormat (AS_00031004)
-
 ```
