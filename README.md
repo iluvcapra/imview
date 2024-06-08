@@ -6,7 +6,29 @@ ADM WAVE File Viewer/Inspector
 
 This project is a work-in-progress and is not at this time useable.
 
-## Example
+## Examples
+
+### Print Track List and Roles 
+
+```sh 
+$ imview tracks test_audio/adm.wav
+Trk 1 ATU_00000001 "DIAL" "Bed 1-10" "DirectSpeakers" "RoomCentricLeft" 
+Trk 2 ATU_00000002 "DIAL" "Bed 1-10" "DirectSpeakers" "RoomCentricRight" 
+Trk 3 ATU_00000003 "DIAL" "Bed 1-10" "DirectSpeakers" "RoomCentricCenter" 
+Trk 4 ATU_00000004 "DIAL" "Bed 1-10" "DirectSpeakers" "RoomCentricLFE" 
+Trk 5 ATU_00000005 "DIAL" "Bed 1-10" "DirectSpeakers" "RoomCentricLeftSideSurround" 
+Trk 6 ATU_00000006 "DIAL" "Bed 1-10" "DirectSpeakers" "RoomCentricRightSideSurround" 
+Trk 7 ATU_00000007 "DIAL" "Bed 1-10" "DirectSpeakers" "RoomCentricLeftRearSurround" 
+Trk 8 ATU_00000008 "DIAL" "Bed 1-10" "DirectSpeakers" "RoomCentricRightRearSurround" 
+Trk 9 ATU_00000009 "DIAL" "Bed 1-10" "DirectSpeakers" "RoomCentricLeftTopSurround" 
+Trk 10 ATU_0000000a "DIAL" "Bed 1-10" "DirectSpeakers" "RoomCentricRightTopSurround" 
+Trk 11 ATU_0000000b "DIAL" "Object 11" "Objects" "Atmos_Obj_1" 
+Trk 12 ATU_0000000c "MX" "Object 12" "Objects" "Atmos_Obj_2" 
+Trk 13 ATU_0000000d "FX" "Object 13" "Objects" "Atmos_Obj_3" 
+Trk 14 ATU_0000000e "FX" "Object 14" "Objects" "Atmos_Obj_4" 
+```
+
+### Print AudioProgramme Tree
 
 ```sh 
 $ imview program test_audio/adm.wav
