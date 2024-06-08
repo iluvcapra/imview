@@ -547,7 +547,7 @@ pub fn compileADM(xml_data: []const u8, chna_data: []const u8, allocator: Alloca
     return database;
 }
 
-pub fn print_adm_xml_summary(adm_xml: []const u8, chna_data: []const u8, writer: AnyWriter, allocator: Allocator) !void {
+pub fn printAdmXmlSummary(adm_xml: []const u8, chna_data: []const u8, writer: AnyWriter, allocator: Allocator) !void {
     var database = compileADM(adm_xml, chna_data, allocator);
     defer database.deinit();
 
