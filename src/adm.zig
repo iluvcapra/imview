@@ -49,7 +49,7 @@ const Database = struct {
     audio_stream_format_map: StringHashMap(AudioStreamFormat),
     audio_channel_to_stream_format_map: StringHashMap([]const u8),
     audio_track_format_map: StringHashMap(AudioTrackFormat),
-    audio_track_to_stream_format_map: StringHashMap([]const u8),
+    stream_format_to_audio_track_map: StringHashMap([]const u8),
     audio_track_uid_map: StringHashMap(AudioTrackUID),
     allocator: Allocator,
 
@@ -63,7 +63,7 @@ const Database = struct {
             .audio_stream_format_map = StringHashMap(AudioStreamFormat).init(allocator),
             .audio_channel_to_stream_format_map = StringHashMap([]const u8).init(allocator),
             .audio_track_format_map = StringHashMap(AudioTrackFormat).init(allocator),
-            .audio_track_to_stream_format_map = StringHashMap([]const u8).init(allocator),
+            .stream_format_to_audio_track_map = StringHashMap([]const u8).init(allocator),
             .audio_track_uid_map = StringHashMap(AudioTrackUID).init(allocator),
             .allocator = allocator,
         };
@@ -111,13 +111,13 @@ const Database = struct {
         }
 
         for (stream_format.audioTrackFormatIDs) |track_id| {
-            self.audio_track_to_stream_format_map.put(track_id, stream_format.audioStreamFormatID) catch {
+            self.stream_format_to_audio_track_map.put(stream_format.audioStreamFormatID, track_id) catch {
                 @panic("HashMap.put() failed!");
             };
         }
     }
 
-    fn insertAudioTrackFormat(self: @This(), track_format: AudioTrackFormat) void {
+    fn insertAudioTrackFormat(self: *@This(), track_format: AudioTrackFormat) void {
         self.audio_track_format_map.put(track_format.audioTrackFormatID, track_format) catch {
             @panic("HashMap.put() failed!");
         };
@@ -142,7 +142,7 @@ const Database = struct {
         freeMap(AudioTrackUID, &self.audio_track_uid_map);
 
         self.audio_channel_to_stream_format_map.deinit();
-        self.audio_track_to_stream_format_map.deinit();
+        self.stream_format_to_audio_track_map.deinit();
     }
 };
 
@@ -385,6 +385,20 @@ const AudioTrackFormat = struct {
     audioStreamFormatID: []const u8,
     allocator: Allocator,
 
+    fn addAll(xpath_ctx: xml.xmlXPathContextPtr, database: *Database) void {
+        var object_iter = XPathNodeSetValue("//adm:audioFormatExtended/adm:audioTrackFormat", xpath_ctx, null);
+        while (object_iter.next()) |node| {
+            const id = XPathStringValue("string(./@audioTrackFormatID)", xpath_ctx, node, database.allocator);
+            const stream = XPathStringValue("string(./adm:audioStreamFormatIDRef/text())", xpath_ctx, node, database.allocator);
+
+            database.insertAudioTrackFormat(@This(){
+                .audioTrackFormatID = id,
+                .audioStreamFormatID = stream,
+                .allocator = database.allocator,
+            });
+        }
+    }
+
     fn deinit(self: @This()) void {
         self.allocator.free(self.audioTrackFormatID);
         self.allocator.free(self.audioStreamFormatID);
@@ -433,6 +447,7 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter, allocator: 
     AudioPackFormat.addAll(xpath_ctx, &database);
     AudioChannelFormat.addAll(xpath_ctx, &database);
     AudioStreamFormat.addAll(xpath_ctx, &database);
+    AudioTrackFormat.addAll(xpath_ctx, &database);
 
     var programme_iter = database.audio_programme_map.valueIterator();
     while (programme_iter.next()) |programme| {
@@ -465,8 +480,13 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter, allocator: 
 
                         if (database.audio_channel_to_stream_format_map.get(chn_id)) |stream_id| {
                             try writer.print("         -> AudioStreamFormat ({s})\n", .{stream_id});
+                            if (database.stream_format_to_audio_track_map.get(stream_id)) |track_id| {
+                                try writer.print("         -> AudioTrackFormat ({s})\n", .{track_id});
+                            } else {
+                                try writer.print("         !! No AudioTrackFormat\n", .{});
+                            }
                         } else {
-                            try writer.print("         ! No AudioStreamFormat\n", .{});
+                            try writer.print("         !! No AudioStreamFormat\n", .{});
                         }
                     }
                 }
