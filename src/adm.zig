@@ -33,7 +33,7 @@ fn extractRefs(node_expr: []const u8, xpath_ctx: xml.xmlXPathContextPtr, root_no
     };
 }
 
-fn freeStrList(x: [][]const u8, allocator: Allocator) void {
+inline fn freeStrList(x: [][]const u8, allocator: Allocator) void {
     for (x) |v| {
         allocator.free(v);
     }
