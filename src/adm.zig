@@ -5,8 +5,8 @@ const ArrayList = std.ArrayList;
 const StringHashMap = std.hash_map.StringHashMap;
 
 const xml_additions = @import("xml_additions.zig");
-const xpath_string_value = xml_additions.xpath_string_value;
-const xpath_nodeset_value = xml_additions.xpath_nodeset_value;
+const XPathStringValue = xml_additions.xpath_string_value;
+const XPathNodeSetValue = xml_additions.xpath_nodeset_value;
 
 const wave = @import("wave.zig");
 const xml = @cImport({
@@ -21,9 +21,9 @@ const xml = @cImport({
 fn extractRefs(node_expr: []const u8, xpath_ctx: xml.xmlXPathContextPtr, root_node: xml.xmlNodePtr, allocator: Allocator) [][]const u8 {
     var refs_list = ArrayList([]const u8).init(allocator);
     defer refs_list.deinit();
-    var ref_nodes = xpath_nodeset_value(node_expr, xpath_ctx, root_node);
+    var ref_nodes = XPathNodeSetValue(node_expr, xpath_ctx, root_node);
     while (ref_nodes.next()) |a_ref| {
-        const ref_str = xpath_string_value("string(./text())", xpath_ctx, a_ref, allocator);
+        const ref_str = XPathStringValue("string(./text())", xpath_ctx, a_ref, allocator);
         refs_list.append(ref_str) catch {
             @panic("ArrayList.append() failed!");
         };
@@ -141,23 +141,23 @@ const AudioProgramme = struct {
     allocator: Allocator,
 
     fn init(allocator: Allocator, xpath_ctx: xml.xmlXPathContextPtr) @This() {
-        const audioProgrammeID = xpath_string_value("string(//adm:audioFormatExtended/" ++
+        const audioProgrammeID = XPathStringValue("string(//adm:audioFormatExtended/" ++
             "adm:audioProgramme[1]/@audioProgrammeID)", xpath_ctx, null, allocator);
         if (audioProgrammeID.len == 0) {
             @panic("audioProgramme not found!");
         }
-        const audioProgrammeName = xpath_string_value("string(//*/adm:audioProgramme[1]/" ++
+        const audioProgrammeName = XPathStringValue("string(//*/adm:audioProgramme[1]/" ++
             "@audioProgrammeName)", xpath_ctx, null, allocator);
-        const start = xpath_string_value("string(//*/adm:audioProgramme[1]/@start)", xpath_ctx, null, allocator);
-        const end = xpath_string_value("string(//*/adm:audioProgramme[1]/@end)", xpath_ctx, null, allocator);
+        const start = XPathStringValue("string(//*/adm:audioProgramme[1]/@start)", xpath_ctx, null, allocator);
+        const end = XPathStringValue("string(//*/adm:audioProgramme[1]/@end)", xpath_ctx, null, allocator);
 
         var contentIds = ArrayList([]const u8).init(allocator);
         defer contentIds.deinit();
 
-        var acoIter = xpath_nodeset_value("//adm:audioProgramme[1]/adm:audioContentIDRef", xpath_ctx, null);
+        var acoIter = XPathNodeSetValue("//adm:audioProgramme[1]/adm:audioContentIDRef", xpath_ctx, null);
 
         while (acoIter.next()) |node| {
-            const this_id = xpath_string_value("string(./text())", xpath_ctx, node, allocator);
+            const this_id = XPathStringValue("string(./text())", xpath_ctx, node, allocator);
             contentIds.append(this_id) catch {
                 @panic("ArrayList.append() failed!");
             };
@@ -191,10 +191,10 @@ const AudioContent = struct {
     allocator: Allocator,
 
     fn addAll(xpath_ctx: xml.xmlXPathContextPtr, database: *Database) void {
-        var content_iter = xpath_nodeset_value("//adm:audioFormatExtended/adm:audioContent", xpath_ctx, null);
+        var content_iter = XPathNodeSetValue("//adm:audioFormatExtended/adm:audioContent", xpath_ctx, null);
         while (content_iter.next()) |node| {
-            const id = xpath_string_value("string(./@audioContentID)", xpath_ctx, node, database.allocator);
-            const name = xpath_string_value("string(./@audioContentName)", xpath_ctx, node, database.allocator);
+            const id = XPathStringValue("string(./@audioContentID)", xpath_ctx, node, database.allocator);
+            const name = XPathStringValue("string(./@audioContentName)", xpath_ctx, node, database.allocator);
             const obj_refs = extractRefs("./adm:audioObjectIDRef", xpath_ctx, node, database.allocator);
 
             database.insertAudioContent(@This(){
@@ -224,12 +224,12 @@ const AudioObject = struct {
     allocator: Allocator,
 
     fn addAll(xpath_ctx: xml.xmlXPathContextPtr, database: *Database) void {
-        var object_iter = xpath_nodeset_value("//adm:audioFormatExtended/adm:audioObject", xpath_ctx, null);
+        var object_iter = XPathNodeSetValue("//adm:audioFormatExtended/adm:audioObject", xpath_ctx, null);
         while (object_iter.next()) |node| {
-            const id = xpath_string_value("string(./@audioObjectID)", xpath_ctx, node, database.allocator);
-            const name = xpath_string_value("string(./@audioObjectName)", xpath_ctx, node, database.allocator);
-            const start = xpath_string_value("string(./@start)", xpath_ctx, node, database.allocator);
-            const duration = xpath_string_value("string(./@duration)", xpath_ctx, node, database.allocator);
+            const id = XPathStringValue("string(./@audioObjectID)", xpath_ctx, node, database.allocator);
+            const name = XPathStringValue("string(./@audioObjectName)", xpath_ctx, node, database.allocator);
+            const start = XPathStringValue("string(./@start)", xpath_ctx, node, database.allocator);
+            const duration = XPathStringValue("string(./@duration)", xpath_ctx, node, database.allocator);
             const pack_format_refs = extractRefs("./adm:audioPackFormatIDRef", xpath_ctx, node, database.allocator);
             const track_uid_refs = extractRefs("./adm:audioTrackUIDRef", xpath_ctx, node, database.allocator);
 
@@ -265,12 +265,12 @@ const AudioPackFormat = struct {
     allocator: Allocator,
 
     fn addAll(xpath_ctx: xml.xmlXPathContextPtr, database: *Database) void {
-        var object_iter = xpath_nodeset_value("//adm:audioFormatExtended/adm:audioPackFormat", xpath_ctx, null);
+        var object_iter = XPathNodeSetValue("//adm:audioFormatExtended/adm:audioPackFormat", xpath_ctx, null);
         while (object_iter.next()) |node| {
-            const id = xpath_string_value("string(./@audioPackFormatID)", xpath_ctx, node, database.allocator);
-            const name = xpath_string_value("string(./@audioPackFormatName)", xpath_ctx, node, database.allocator);
-            const label = xpath_string_value("string(./@typeLabel)", xpath_ctx, node, database.allocator);
-            const definition = xpath_string_value("string(./@typeDefinition)", xpath_ctx, node, database.allocator);
+            const id = XPathStringValue("string(./@audioPackFormatID)", xpath_ctx, node, database.allocator);
+            const name = XPathStringValue("string(./@audioPackFormatName)", xpath_ctx, node, database.allocator);
+            const label = XPathStringValue("string(./@typeLabel)", xpath_ctx, node, database.allocator);
+            const definition = XPathStringValue("string(./@typeDefinition)", xpath_ctx, node, database.allocator);
             const channel_refs = extractRefs("./adm:audioChannelFormatIDRef", xpath_ctx, node, database.allocator);
 
             database.insertAudioPackFormat(@This(){
@@ -301,12 +301,12 @@ const AudioChannelFormat = struct {
     allocator: Allocator,
 
     fn addAll(xpath_ctx: xml.xmlXPathContextPtr, database: *Database) void {
-        var object_iter = xpath_nodeset_value("//adm:audioFormatExtended/adm:audioChannelFormat", xpath_ctx, null);
+        var object_iter = XPathNodeSetValue("//adm:audioFormatExtended/adm:audioChannelFormat", xpath_ctx, null);
         while (object_iter.next()) |node| {
-            const id = xpath_string_value("string(./@audioChannelFormatID)", xpath_ctx, node, database.allocator);
-            const name = xpath_string_value("string(./@audioChannelFormatName)", xpath_ctx, node, database.allocator);
-            const label = xpath_string_value("string(./@typeLabel)", xpath_ctx, node, database.allocator);
-            const definition = xpath_string_value("string(./@typeDefinition)", xpath_ctx, node, database.allocator);
+            const id = XPathStringValue("string(./@audioChannelFormatID)", xpath_ctx, node, database.allocator);
+            const name = XPathStringValue("string(./@audioChannelFormatName)", xpath_ctx, node, database.allocator);
+            const label = XPathStringValue("string(./@typeLabel)", xpath_ctx, node, database.allocator);
+            const definition = XPathStringValue("string(./@typeDefinition)", xpath_ctx, node, database.allocator);
 
             database.insertAudioChannelFormat(@This(){
                 .audioChannelFormatID = id,
@@ -334,16 +334,16 @@ const AudioStreamFormat = struct {
     allocator: Allocator,
 
     fn addAll(xpath_ctx: xml.xmlXPathContextPtr, database: *Database) void {
-        var object_iter = xpath_nodeset_value("//adm:audioFormatExtended/adm:audioStreamFormat", xpath_ctx, null);
+        var object_iter = XPathNodeSetValue("//adm:audioFormatExtended/adm:audioStreamFormat", xpath_ctx, null);
 
         while (object_iter.next()) |node| {
-            const id = xpath_string_value("string(./@audioStreamFormatID)", xpath_ctx, node, database.allocator);
+            const id = XPathStringValue("string(./@audioStreamFormatID)", xpath_ctx, node, database.allocator);
 
-            var get_chan_fmt = xpath_nodeset_value("./adm:audioChannelFormatIDRef", xpath_ctx, node);
+            var get_chan_fmt = XPathNodeSetValue("./adm:audioChannelFormatIDRef", xpath_ctx, node);
             var chan_fmt_id: ?[]const u8 = null;
 
             if (get_chan_fmt.next()) |chan_fmt_node| {
-                chan_fmt_id = xpath_string_value("string(.)", xpath_ctx, chan_fmt_node, database.allocator);
+                chan_fmt_id = XPathStringValue("string(.)", xpath_ctx, chan_fmt_node, database.allocator);
             }
 
             const track_format_uid_refs = extractRefs("./adm:audioTrackFormatIDRef", xpath_ctx, node, database.allocator);
@@ -368,13 +368,15 @@ const AudioStreamFormat = struct {
 
 const AudioTrack = struct {
     audioTrackFormatID: []const u8,
+    audioStreamFormatID: []const u8,
     allocator: Allocator,
 };
 
 const AudioTrackUID = struct {
     audioTrackFormatUID: []const u8,
     audioTrackFormatID: ?[]const u8,
-    track_index: u16,
+    sampleRate: f32,
+    bitDepth: u8,
     allocator: Allocator,
 };
 
