@@ -27,22 +27,25 @@ fn usage() void {
     , .{});
 }
 
-fn processArg(mode: Mode, file: []const u8, allocator: std.mem.Allocator) !void {
+fn processPositionalArg(mode: Mode, file: []const u8, allocator: std.mem.Allocator) !void {
+    const adm_xml = try wave.read_chunk(file, "axml", allocator) orelse {
+        std.debug.print("{s} is not an ADM WAVE file, skipping.", .{file});
+        return;
+    };
+    defer allocator.free(adm_xml);
+    const chna_data = try wave.read_chunk(file, "chna", allocator) orelse {
+        std.debug.print("{s} is not an ADM WAVE file, skipping.", .{file});
+        return;
+    };
+    defer allocator.free(chna_data);
+
+    const writer = std.io.getStdOut().writer().any();
     switch (mode) {
         Mode.print_programme => {
-            if (try wave.read_chunk(file, "axml", allocator)) |adm_xml| {
-                defer allocator.free(adm_xml);
-                if (try wave.read_chunk(file, "chna", allocator)) |chna_data| {
-                    defer allocator.free(chna_data);
-                    const writer = std.io.getStdOut().writer().any();
-                    try adm.printAdmXmlSummary(adm_xml, chna_data, writer, allocator);
-                }
-            } else {
-                std.debug.print("File {s} not an ADM file. Skipping.\n", .{file});
-            }
+            try adm.printProgrammeTree(adm_xml, chna_data, writer, allocator);
         },
         Mode.print_tracks => {
-            std.debug.print("`tracks` mode not implemented.\n", .{});
+            try adm.printTrackList(adm_xml, chna_data, writer, allocator);
         },
     }
 }
@@ -72,7 +75,7 @@ pub fn main() !void {
                 }
             },
             else => {
-                try processArg(mode, arg, allocator);
+                try processPositionalArg(mode, arg, allocator);
             },
         }
     }
