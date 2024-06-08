@@ -514,11 +514,11 @@ const ChnaEntry = struct {
     }
 };
 
-pub fn print_adm_xml_summary(adm_xml: []const u8, chna_data: []const u8, writer: AnyWriter, allocator: Allocator) !void {
+pub fn compileADM(xml_data: []const u8, chna_data: []const u8, allocator: Allocator) Database {
     xml.xmlInitParser();
     defer xml.xmlCleanupParser();
 
-    const doc: xml.xmlDocPtr = xml.xmlReadMemory(@ptrCast(adm_xml), @intCast(adm_xml.len), null, "utf-8", 0) orelse {
+    const doc: xml.xmlDocPtr = xml.xmlReadMemory(@ptrCast(xml_data), @intCast(xml_data.len), null, "utf-8", 0) orelse {
         @panic("axml could not be parsed!");
     };
     defer xml.xmlFreeDoc(doc);
@@ -533,7 +533,6 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, chna_data: []const u8, writer:
     }
 
     var database = Database.init(allocator);
-    defer database.deinit();
 
     database.insertAudioProgramme(AudioProgramme.init(allocator, xpath_ctx));
     AudioContent.addAll(xpath_ctx, &database);
@@ -544,6 +543,13 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, chna_data: []const u8, writer:
     AudioTrackFormat.addAll(xpath_ctx, &database);
     AudioTrackUID.addAll(xpath_ctx, &database);
     ChnaEntry.addAll(chna_data, &database);
+
+    return database;
+}
+
+pub fn print_adm_xml_summary(adm_xml: []const u8, chna_data: []const u8, writer: AnyWriter, allocator: Allocator) !void {
+    var database = compileADM(adm_xml, chna_data, allocator);
+    defer database.deinit();
 
     var programme_iter = database.audio_programme_map.valueIterator();
     while (programme_iter.next()) |programme| {
