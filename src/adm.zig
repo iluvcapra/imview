@@ -51,6 +51,7 @@ const Database = struct {
     audio_track_format_map: StringHashMap(AudioTrackFormat),
     stream_format_to_audio_track_map: StringHashMap([]const u8),
     audio_track_uid_map: StringHashMap(AudioTrackUID),
+    chna_record_map: StringHashMap(ChnaEntry),
     allocator: Allocator,
 
     fn init(allocator: Allocator) @This() {
@@ -65,6 +66,7 @@ const Database = struct {
             .audio_track_format_map = StringHashMap(AudioTrackFormat).init(allocator),
             .stream_format_to_audio_track_map = StringHashMap([]const u8).init(allocator),
             .audio_track_uid_map = StringHashMap(AudioTrackUID).init(allocator),
+            .chna_record_map = StringHashMap(ChnaEntry).init(allocator),
             .allocator = allocator,
         };
     }
@@ -129,6 +131,12 @@ const Database = struct {
         };
     }
 
+    fn insertChnaEntry(self: *@This(), chna_entry: ChnaEntry) void {
+        self.chna_record_map.put(chna_entry.track_ref, chna_entry) catch {
+            @panic("HashMap.put() failed!");
+        };
+    }
+
     fn freeMap(comptime T: type, m: *StringHashMap(T)) void {
         var i = m.valueIterator();
         while (i.next()) |v| {
@@ -146,6 +154,7 @@ const Database = struct {
         freeMap(AudioStreamFormat, &self.audio_stream_format_map);
         freeMap(AudioTrackFormat, &self.audio_track_format_map);
         freeMap(AudioTrackUID, &self.audio_track_uid_map);
+        freeMap(ChnaEntry, &self.chna_record_map);
 
         self.audio_channel_to_stream_format_map.deinit();
         self.stream_format_to_audio_track_map.deinit();
@@ -455,7 +464,57 @@ const AudioTrackUID = struct {
     }
 };
 
-pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter, allocator: Allocator) !void {
+const ChnaEntry = struct {
+    track_index: u16,
+    track_uid: []const u8,
+    track_ref: []const u8,
+    pack_ref: []const u8,
+    allocator: Allocator,
+
+    fn addAll(chna_data: []const u8, database: *Database) void {
+        const entry_count = @divFloor(chna_data.len - 4, 40);
+        for (0..entry_count) |entry_index| {
+            const entry_offset = entry_index * 40 + 4;
+            const struct_data = chna_data[entry_offset..(entry_offset + 40)];
+            const track_index = std.mem.readInt(u16, struct_data[0..2], std.builtin.Endian.little);
+
+            if (track_index == 0) {
+                continue;
+            } else {
+                const track_uid: []u8 = database.allocator.alloc(u8, 12) catch {
+                    @panic("Alloc failed");
+                };
+                std.mem.copyForwards(u8, track_uid, struct_data[2..14]);
+
+                const track_ref: []u8 = database.allocator.alloc(u8, 14) catch {
+                    @panic("Alloc failed");
+                };
+                std.mem.copyForwards(u8, track_ref, struct_data[14..28]);
+
+                const pack_ref: []u8 = database.allocator.alloc(u8, 11) catch {
+                    @panic("Alloc failed");
+                };
+                std.mem.copyForwards(u8, pack_ref, struct_data[28..39]);
+
+                database.insertChnaEntry(@This(){
+                    .track_index = track_index,
+                    .track_uid = track_uid,
+                    .track_ref = track_ref,
+                    .pack_ref = pack_ref,
+                    .allocator = database.allocator,
+                });
+            }
+        }
+    }
+
+    fn deinit(self: @This()) void {
+        self.allocator.free(self.track_uid);
+        self.allocator.free(self.track_ref);
+        self.allocator.free(self.pack_ref);
+    }
+};
+
+pub fn print_adm_xml_summary(adm_xml: []const u8, chna_data: []const u8, writer: AnyWriter, allocator: Allocator) !void {
     xml.xmlInitParser();
     defer xml.xmlCleanupParser();
 
@@ -484,6 +543,7 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter, allocator: 
     AudioStreamFormat.addAll(xpath_ctx, &database);
     AudioTrackFormat.addAll(xpath_ctx, &database);
     AudioTrackUID.addAll(xpath_ctx, &database);
+    ChnaEntry.addAll(chna_data, &database);
 
     var programme_iter = database.audio_programme_map.valueIterator();
     while (programme_iter.next()) |programme| {
@@ -517,7 +577,14 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter, allocator: 
                         if (database.audio_channel_to_stream_format_map.get(chn_id)) |stream_id| {
                             try writer.print("         -> AudioStreamFormat ({s})\n", .{stream_id});
                             if (database.stream_format_to_audio_track_map.get(stream_id)) |track_id| {
-                                try writer.print("         -> AudioTrackFormat ({s})\n", .{track_id});
+                                if (database.audio_track_format_map.get(track_id)) |track_format| {
+                                    try writer.print("         -> AudioTrackFormat ({s})\n", .{track_format.audioTrackFormatID});
+                                    if (database.chna_record_map.get(track_format.audioTrackFormatID)) |chna| {
+                                        try writer.print("         => AudioTrackUID ({s}) [index {}]\n", .{ chna.track_uid, chna.track_index });
+                                    } else {}
+                                } else {
+                                    try writer.print("         ? *{s}\n", .{track_id});
+                                }
                             } else {
                                 try writer.print("         !! No AudioTrackFormat\n", .{});
                             }

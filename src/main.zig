@@ -32,7 +32,11 @@ fn processArg(mode: Mode, file: []const u8, allocator: std.mem.Allocator) !void 
         Mode.print_programme => {
             if (try wave.read_chunk(file, "axml", allocator)) |adm_xml| {
                 defer allocator.free(adm_xml);
-                try adm.print_adm_xml_summary(adm_xml, std.io.getStdOut().writer().any(), allocator);
+                if (try wave.read_chunk(file, "chna", allocator)) |chna_data| {
+                    defer allocator.free(chna_data);
+                    const writer = std.io.getStdOut().writer().any();
+                    try adm.print_adm_xml_summary(adm_xml, chna_data, writer, allocator);
+                }
             } else {
                 std.debug.print("File {s} not an ADM file. Skipping.\n", .{file});
             }
