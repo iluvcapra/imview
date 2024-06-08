@@ -192,6 +192,7 @@ const Database = struct {
         freeMap(ChnaEntry, &self.chna_record_map);
 
         self.allocator.free(self.track_uid_list);
+
         self.audio_channel_to_stream_format_map.deinit();
         self.stream_format_to_audio_track_map.deinit();
         self.audio_track_uid_to_format_map.deinit();

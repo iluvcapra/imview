@@ -4,7 +4,8 @@ ADM WAVE File Viewer/Inspector
 
 ## Work-in-Progress
 
-This project is a work-in-progress and is not at this time useable.
+This project is a work-in-progress. Behavior and features may change often
+and without notice.
 
 ## Examples
 
