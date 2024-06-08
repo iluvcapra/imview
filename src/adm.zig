@@ -48,6 +48,8 @@ const Database = struct {
     audio_channel_format_map: StringHashMap(AudioChannelFormat),
     audio_stream_format_map: StringHashMap(AudioStreamFormat),
     audio_channel_to_stream_format_map: StringHashMap(AudioStreamFormat),
+    audio_track_format_map: StringHashMap(AudioTrackFormat),
+    audio_track_uid_map: StringHashMap(AudioTrackUID),
     allocator: Allocator,
 
     fn init(allocator: Allocator) @This() {
@@ -59,6 +61,8 @@ const Database = struct {
             .audio_channel_format_map = StringHashMap(AudioChannelFormat).init(allocator),
             .audio_stream_format_map = StringHashMap(AudioStreamFormat).init(allocator),
             .audio_channel_to_stream_format_map = StringHashMap(AudioStreamFormat).init(allocator),
+            .audio_track_format_map = StringHashMap(AudioTrackFormat).init(allocator),
+            .audio_track_uid_map = StringHashMap(AudioTrackUID).init(allocator),
             .allocator = allocator,
         };
     }
@@ -119,7 +123,8 @@ const Database = struct {
         freeMap(AudioPackFormat, &self.audio_pack_format_map);
         freeMap(AudioChannelFormat, &self.audio_channel_format_map);
         freeMap(AudioStreamFormat, &self.audio_stream_format_map);
-
+        freeMap(AudioTrackFormat, &self.audio_track_format_map);
+        freeMap(AudioTrackUID, &self.audio_track_uid_map);
         self.audio_channel_to_stream_format_map.deinit();
     }
 };
@@ -358,18 +363,30 @@ const AudioStreamFormat = struct {
     }
 };
 
-const AudioTrack = struct {
+const AudioTrackFormat = struct {
     audioTrackFormatID: []const u8,
     audioStreamFormatID: []const u8,
     allocator: Allocator,
+
+    fn deinit(self: @This()) void {
+        self.allocator.free(self.audioTrackFormatID);
+        self.allocator.free(self.audioStreamFormatID);
+    }
 };
 
 const AudioTrackUID = struct {
-    audioTrackFormatUID: []const u8,
+    audioTrackUID: []const u8,
     audioTrackFormatID: ?[]const u8,
     sampleRate: f32,
     bitDepth: u8,
     allocator: Allocator,
+
+    fn deinit(self: @This()) void {
+        self.allocator.free(self.audioTrackUID);
+        if (self.audioTrackFormatID) |v| {
+            self.allocator.free(v);
+        }
+    }
 };
 
 pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter, allocator: Allocator) !void {
