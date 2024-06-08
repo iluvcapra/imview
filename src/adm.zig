@@ -51,22 +51,14 @@ const Database = struct {
     allocator: Allocator,
 
     fn init(allocator: Allocator) @This() {
-        const audio_programme_map = StringHashMap(AudioProgramme).init(allocator);
-        const audio_content_map = StringHashMap(AudioContent).init(allocator);
-        const audio_object_map = StringHashMap(AudioObject).init(allocator);
-        const audio_pack_format_map = StringHashMap(AudioPackFormat).init(allocator);
-        const audio_channel_format_map = StringHashMap(AudioChannelFormat).init(allocator);
-        const audio_stream_format_map = StringHashMap(AudioStreamFormat).init(allocator);
-        const audio_channel_to_stream_format_map = StringHashMap(AudioStreamFormat).init(allocator);
-
         return @This(){
-            .audio_programme_map = audio_programme_map,
-            .audio_content_map = audio_content_map,
-            .audio_object_map = audio_object_map,
-            .audio_pack_format_map = audio_pack_format_map,
-            .audio_channel_format_map = audio_channel_format_map,
-            .audio_stream_format_map = audio_stream_format_map,
-            .audio_channel_to_stream_format_map = audio_channel_to_stream_format_map,
+            .audio_programme_map = StringHashMap(AudioProgramme).init(allocator),
+            .audio_content_map = StringHashMap(AudioContent).init(allocator),
+            .audio_object_map = StringHashMap(AudioObject).init(allocator),
+            .audio_pack_format_map = StringHashMap(AudioPackFormat).init(allocator),
+            .audio_channel_format_map = StringHashMap(AudioChannelFormat).init(allocator),
+            .audio_stream_format_map = StringHashMap(AudioStreamFormat).init(allocator),
+            .audio_channel_to_stream_format_map = StringHashMap(AudioStreamFormat).init(allocator),
             .allocator = allocator,
         };
     }
