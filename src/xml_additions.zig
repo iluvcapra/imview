@@ -47,7 +47,7 @@ pub const XPathNodeIter = struct {
 /// and then the original context node is restored at the end of the function.
 /// Panics if xmlXPathEvalExpression retunrs a null.
 /// The returned value must be freed by the caller with xmlXPathFreeObject()
-fn xpath_eval_with_context_node(expression: []const u8, xpath_ctx: xml.xmlXPathContextPtr, node_ctx: ?xml.xmlNodePtr) xml.xmlXPathObjectPtr {
+fn XPathEvalWithContextNode(expression: []const u8, xpath_ctx: xml.xmlXPathContextPtr, node_ctx: ?xml.xmlNodePtr) xml.xmlXPathObjectPtr {
     var orig_node: ?xml.xmlNodePtr = null;
     if (node_ctx) |node| {
         orig_node = xpath_ctx.*.node;
@@ -73,8 +73,8 @@ fn xpath_eval_with_context_node(expression: []const u8, xpath_ctx: xml.xmlXPathC
 /// The return value must be freed by the caller.
 /// If the query does not result in a string return value, this function will
 /// panic.
-pub fn xpath_string_value(xpath: []const u8, xpath_ctx: xml.xmlXPathContextPtr, node: ?xml.xmlNodePtr, allocator: Allocator) []const u8 {
-    const result = xpath_eval_with_context_node(xpath, xpath_ctx, node);
+pub fn XPathStringValue(xpath: []const u8, xpath_ctx: xml.xmlXPathContextPtr, node: ?xml.xmlNodePtr, allocator: Allocator) []const u8 {
+    const result = XPathEvalWithContextNode(xpath, xpath_ctx, node);
     defer xml.xmlXPathFreeObject(result);
 
     switch (result.*.type) {
@@ -88,7 +88,7 @@ pub fn xpath_string_value(xpath: []const u8, xpath_ctx: xml.xmlXPathContextPtr, 
             return retval;
         },
         else => {
-            @panic("XPath parameter to xpath_string_value() does not have string result!");
+            @panic("XPath parameter to XPathStringValue() does not have string result!");
         },
     }
 }
@@ -98,15 +98,15 @@ pub fn xpath_string_value(xpath: []const u8, xpath_ctx: xml.xmlXPathContextPtr, 
 /// If the query does not result in a string return value, this function will
 /// panic.
 /// The result has to be deinit'ed by the caller.
-pub fn xpath_nodeset_value(xpath: []const u8, xpath_ctx: xml.xmlXPathContextPtr, node: ?xml.xmlNodePtr) XPathNodeIter {
-    const result = xpath_eval_with_context_node(xpath, xpath_ctx, node);
+pub fn XPathNodeSetValue(xpath: []const u8, xpath_ctx: xml.xmlXPathContextPtr, node: ?xml.xmlNodePtr) XPathNodeIter {
+    const result = XPathEvalWithContextNode(xpath, xpath_ctx, node);
 
     switch (result.*.type) {
         xml.XPATH_NODESET => {
             return XPathNodeIter.init(result);
         },
         else => {
-            @panic("XPath parameter to xpath_nodeset_value() does not have nodeset result!");
+            @panic("XPath parameter to XPathNodeSetValue() does not have nodeset result!");
         },
     }
 }

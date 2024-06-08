@@ -5,8 +5,8 @@ const ArrayList = std.ArrayList;
 const StringHashMap = std.hash_map.StringHashMap;
 
 const xml_additions = @import("xml_additions.zig");
-const XPathStringValue = xml_additions.xpath_string_value;
-const XPathNodeSetValue = xml_additions.xpath_nodeset_value;
+const XPathStringValue = xml_additions.XPathStringValue;
+const XPathNodeSetValue = xml_additions.XPathNodeSetValue;
 
 const wave = @import("wave.zig");
 const xml = @cImport({
