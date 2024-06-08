@@ -123,6 +123,12 @@ const Database = struct {
         };
     }
 
+    fn insertAudioTrackUID(self: *@This(), audio_track_uid: AudioTrackUID) void {
+        self.audio_track_uid_map.put(audio_track_uid.audioTrackUID, audio_track_uid) catch {
+            @panic("HashMap.put() failed!");
+        };
+    }
+
     fn freeMap(comptime T: type, m: *StringHashMap(T)) void {
         var i = m.valueIterator();
         while (i.next()) |v| {
@@ -412,6 +418,35 @@ const AudioTrackUID = struct {
     bitDepth: u8,
     allocator: Allocator,
 
+    fn addAll(xpath_ctx: xml.xmlXPathContextPtr, database: *Database) void {
+        var object_iter = XPathNodeSetValue("//adm:audioFormatExtended/adm:audioTrackUID", xpath_ctx, null);
+        while (object_iter.next()) |node| {
+            const id = XPathStringValue("string(./@UID)", xpath_ctx, node, database.allocator);
+            const track = XPathStringValue("string(./adm:audioTrackFormatIDRef/text())", xpath_ctx, node, database.allocator);
+
+            const bit_depth_s = XPathStringValue("string(./@bitDepth)", xpath_ctx, node, database.allocator);
+            defer database.allocator.free(bit_depth_s);
+            const sample_rate_s = XPathStringValue("string(./@sampleRate)", xpath_ctx, node, database.allocator);
+            defer database.allocator.free(sample_rate_s);
+
+            const sample_rate = std.fmt.parseFloat(f32, sample_rate_s) catch {
+                @panic("AudioTrackUID sample rate cannot be parsed");
+            };
+
+            const bit_depth = std.fmt.parseInt(u8, bit_depth_s, 10) catch {
+                @panic("AudioTrackUID bit depth cannot be parsed");
+            };
+
+            database.insertAudioTrackUID(@This(){
+                .audioTrackUID = id,
+                .audioTrackFormatID = track,
+                .sampleRate = sample_rate,
+                .bitDepth = bit_depth,
+                .allocator = database.allocator,
+            });
+        }
+    }
+
     fn deinit(self: @This()) void {
         self.allocator.free(self.audioTrackUID);
         if (self.audioTrackFormatID) |v| {
@@ -448,6 +483,7 @@ pub fn print_adm_xml_summary(adm_xml: []const u8, writer: AnyWriter, allocator: 
     AudioChannelFormat.addAll(xpath_ctx, &database);
     AudioStreamFormat.addAll(xpath_ctx, &database);
     AudioTrackFormat.addAll(xpath_ctx, &database);
+    AudioTrackUID.addAll(xpath_ctx, &database);
 
     var programme_iter = database.audio_programme_map.valueIterator();
     while (programme_iter.next()) |programme| {
