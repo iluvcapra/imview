@@ -75,7 +75,7 @@ const Database2 = struct {
     }
 
     fn deinit(self: @This()) void {
-        self._entities.deinit();
+        self.entities_map.deinit();
     }
 };
 
