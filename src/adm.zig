@@ -40,6 +40,29 @@ inline fn freeStrList(x: [][]const u8, allocator: Allocator) void {
     allocator.free(x);
 }
 
+const DatabaseRecordTag = enum {
+    audioProgramme,
+    audioContent,
+    audioObject,
+    audioPackFormat,
+    audioChannelFormat,
+    audioStreamFormat,
+    // audioBlockFormat,
+    audioTrackFormat,
+    audioTrackUid,
+};
+
+const DatabaseRecord = union(DatabaseRecordTag) {
+    audioProgramme: AudioProgramme,
+    audioContent: AudioContent,
+    audioObject: AudioObject,
+    audioPackFormat: AudioPackFormat,
+    audioChannelFormat: AudioChannelFormat,
+    audioStreamFormat: AudioStreamFormat,
+    audioTrackFormat: AudioTrackFormat,
+    audioTrackUid: AudioTrackUID,
+};
+
 const Database = struct {
     audio_programme_map: StringHashMap(AudioProgramme),
     audio_content_map: StringHashMap(AudioContent),
@@ -621,7 +644,7 @@ pub fn printProgrammeTree(adm_xml: []const u8, chna_data: []const u8, writer: An
                     try writer.print("   ? *{s}\n", .{ao_id});
                     break :obj_blk;
                 };
-                try writer.print("   -> AudioObject ({s}) \"{s}\" (AudioTrackUID count {})\n", .{ audio_object.audioObjectID, audio_object.audioObjectName, audio_object.audioTrackUIDs.len });
+                try writer.print("   + AudioObject ({s}) \"{s}\" (AudioTrackUID count {})\n", .{ audio_object.audioObjectID, audio_object.audioObjectName, audio_object.audioTrackUIDs.len });
                 for (audio_object.audioPackFormatIDs) |ap_id| {
                     const audio_pack = database.audio_pack_format_map.get(ap_id) orelse {
                         try writer.print("     ? *{s}\n", .{ap_id});
