@@ -29,12 +29,12 @@ fn usage() void {
 
 fn processPositionalArg(mode: Mode, file: []const u8, allocator: std.mem.Allocator) !void {
     const adm_xml = try wave.read_chunk(file, "axml", allocator) orelse {
-        std.debug.print("{s} is not an ADM WAVE file, missing `axml` data, skipping.", .{file});
+        std.debug.print("\"{s}\" is not an ADM WAVE file, missing `axml` data. Skipping.", .{file});
         return;
     };
     defer allocator.free(adm_xml);
     const chna_data = try wave.read_chunk(file, "chna", allocator) orelse {
-        std.debug.print("{s} is not an ADM WAVE file, missing `chna` data, skipping.", .{file});
+        std.debug.print("\"{s}\" is not an ADM WAVE file, missing `chna` data. Skipping.", .{file});
         return;
     };
     defer allocator.free(chna_data);
