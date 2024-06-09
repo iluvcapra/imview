@@ -63,6 +63,22 @@ const DatabaseRecord = union(DatabaseRecordTag) {
     audioTrackUid: AudioTrackUID,
 };
 
+const Database2 = struct {
+    entities_map: StringHashMap(DatabaseRecord),
+    allocator: Allocator,
+
+    fn init(allocator: Allocator) @This() {
+        return @This(){
+            .entities_map = StringHashMap(DatabaseRecord).init(allocator),
+            .allocator = allocator,
+        };
+    }
+
+    fn deinit(self: @This()) void {
+        self._entities.deinit();
+    }
+};
+
 const Database = struct {
     audio_programme_map: StringHashMap(AudioProgramme),
     audio_content_map: StringHashMap(AudioContent),
