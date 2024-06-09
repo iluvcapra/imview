@@ -94,7 +94,6 @@ pub fn XPathStringValue(xpath: []const u8, xpath_ctx: xml.xmlXPathContextPtr, no
 }
 
 /// Runs an XPath query against the xpath_ctx and returns a []u8.
-/// The return value must be freed by the caller.
 /// If the query does not result in a string return value, this function will
 /// panic.
 /// The result has to be deinit'ed by the caller.
