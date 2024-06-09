@@ -27,6 +27,7 @@ fn usage() void {
     , .{});
 }
 
+/// Process a file argument using the provided mode.
 fn processPositionalArg(mode: Mode, file: []const u8, allocator: std.mem.Allocator) !void {
     const adm_xml = try wave.read_chunk(file, "axml", allocator) orelse {
         std.debug.print("\"{s}\" is not an ADM WAVE file, missing `axml` data. Skipping.", .{file});
@@ -58,7 +59,7 @@ pub fn main() !void {
     var args_iter = try process.argsWithAllocator(allocator);
     defer args_iter.deinit();
 
-    var mode: Mode = undefined;
+    var mode: ?Mode = null;
     for (0..128) |arg_index| {
         const arg = args_iter.next() orelse {
             break;
@@ -75,9 +76,13 @@ pub fn main() !void {
                 }
             },
             else => {
-                try processPositionalArg(mode, arg, allocator);
+                try processPositionalArg(mode.?, arg, allocator);
             },
         }
+    }
+
+    if (mode == null) {
+        std.debug.print("No mode provided. Aborting.\n", .{});
     }
 }
 

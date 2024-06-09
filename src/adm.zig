@@ -211,7 +211,7 @@ const Database = struct {
         };
     }
 
-    fn freeMap(comptime T: type, m: *StringHashMap(T)) void {
+    inline fn freeMap(comptime T: type, m: *StringHashMap(T)) void {
         var i = m.valueIterator();
         while (i.next()) |v| {
             v.deinit();
