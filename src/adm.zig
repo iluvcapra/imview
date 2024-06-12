@@ -33,6 +33,7 @@ fn extractRefs(node_expr: []const u8, xpath_ctx: xml.xmlXPathContextPtr, root_no
     };
 }
 
+/// Helper function that frees an array of []const u8s
 inline fn freeStrList(x: [][]const u8, allocator: Allocator) void {
     for (x) |v| {
         allocator.free(v);
@@ -67,11 +68,21 @@ const Database2 = struct {
     entities_map: StringHashMap(DatabaseRecord),
     allocator: Allocator,
 
-    fn init(allocator: Allocator) @This() {
+    fn init(axml: []const u8, chna: []const u8, allocator: Allocator) @This() {
+        _ = axml;
+        _ = chna;
+
+        const entities_map = StringHashMap(DatabaseRecord).init(allocator);
+
         return @This(){
-            .entities_map = StringHashMap(DatabaseRecord).init(allocator),
+            .entities_map = entities_map,
             .allocator = allocator,
         };
+    }
+
+    fn audioProgramme(self: @This()) AudioProgramme {
+        _ = self;
+        @panic("Not implemented!");
     }
 
     fn deinit(self: @This()) void {
